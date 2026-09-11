@@ -10,6 +10,10 @@
     <div class="result-stat">
       <div class="result-value" data-counter data-final="{{ predicted_effort_months }}" data-decimals="1">0.0</div>
       <div class="result-label">Predicted Effort (months)</div>
+      {% if estimated_completion %}
+      <p class="result-substat">Estimated completion: around <strong>{{ estimated_completion }}</strong></p>
+      <p class="result-substat-caption">(approx, based on predicted effort — actual timelines vary)</p>
+      {% endif %}
     </div>
     {% endif %}
     <div class="result-stat">

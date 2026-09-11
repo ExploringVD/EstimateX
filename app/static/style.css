@@ -486,6 +486,23 @@ h1.page-title {
   letter-spacing: 0.04em;
 }
 
+.result-substat {
+  margin: 14px 0 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.result-substat strong {
+  color: var(--wine-2);
+  font-weight: 600;
+}
+
+.result-substat-caption {
+  margin: 3px 0 0;
+  font-size: 0.76rem;
+  color: var(--ink-faint);
+}
+
 .result-caption {
   margin: 20px 0 0;
   font-size: 0.82rem;

@@ -25,7 +25,7 @@ The web app originally showed "Team Size" and "Required Reliability" as form fie
 |---|---|---|
 | `team_experience` | Mean of 5 ordinal ratings (`acap`, `aexp`, `pcap`, `vexp`, `lexp`), ordinal-encoded 0–5 | Mean of `TeamExp` and `ManagerExp` (both native 0–4 years) |
 | `project_size_kloc` | `equivphyskloc` directly (already KLOC) | `PointsAdjust` (function points) converted via Capers Jones' ~100 LOC/function-point "backfire" heuristic — the same constant already used in `app.py`'s live Desharnais prediction path, now shared from `preprocessing.py` |
-| `complexity` | `cplx` directly (already the vl–xh scale) | **No analogous column exists.** Imputed with COCOMO-NASA's modal `cplx` value — a stated default, not a fabricated measurement |
+| `complexity` | `cplx` directly (already the vl–xh scale) | **No analogous column exists.** Imputed by sampling COCOMO-NASA's own complexity **distribution** (seeded, reproducible) — a stated default, not a fabricated measurement. (Originally used COCOMO-NASA's single modal value instead — revised, see "Fixing unrealistic small-project predictions" below.) |
 | `source_dataset` | 0 | 1 — lets the model learn any systematic difference between the two collection contexts, including that Desharnais's `complexity` is imputed, not measured |
 | `effort_person_months` (target) | `act_effort` directly (already person-months) | `Effort` (person-hours) ÷ 152 (Boehm/COCOMO's standard hours-per-person-month figure, already used in `app.py`, now shared from `preprocessing.py`) |
 
@@ -35,18 +35,45 @@ Missing values handled exactly as Step 4 already established per source dataset 
 
 ## Validation the unification actually worked
 
-`source_dataset`'s feature importance in the trained Random Forest is **0.005 — by far the least important of the 4 features** (`results/feature_importance_software.png`). That's a meaningful sanity check: if the model were mostly relying on "which original dataset did this row come from" to make predictions, unification would have papered over a real gap rather than closing it. Instead, `project_size_kloc` (0.65) and `complexity` (0.26) dominate — the model is predicting off harmonized project attributes, not off which source system a row originally came from.
+`source_dataset`'s feature importance in the trained Random Forest is **0.017 — by far the least important of the 4 features** (`results/feature_importance_software.png`). That's a meaningful sanity check: if the model were mostly relying on "which original dataset did this row come from" to make predictions, unification would have papered over a real gap rather than closing it. Instead, `project_size_kloc` (0.67) and `complexity` (0.22) dominate — the model is predicting off harmonized project attributes, not off which source system a row originally came from. (Figures retrained after the imputation fix below — `team_experience` sits at 0.087.)
 
-## Results
+## Fixing unrealistic small-project predictions
+
+**Symptom**: a 1 KLOC, Nominal-complexity software submission predicted ~45 months of effort (₹3.82 crore) — far above sane expectations, and nowhere near the smooth, gradually-increasing curve a size-driven estimate should produce.
+
+**Investigation (exact feature vector traced end to end)**: for `team_experience=Intermediate(2), project_size_kloc=1, complexity=n`, the raw row `{team_experience: 2.0, project_size_kloc: 1.0, complexity: 'n', source_dataset: 0}` ordinal-encodes complexity `'n' -> 2.0`, then scales to `[-0.596, -0.614, -1.818, 0]` using the fitted scaler's `mean_=[2.51, 64.93, 3.06]` / `scale_=[0.86, 104.07, 0.59]` — all within a normal, non-extrapolated z-score range. No units/scale bug: `project_size_kloc`'s scaler mean (64.93) matches the raw unified KLOC column's own mean (64.93) exactly, confirming the form's typed KLOC value is treated in the identical unit the training data itself uses (COCOMO's `equivphyskloc` already in KLOC; Desharnais's `PointsAdjust` converted via the same backfire heuristic used elsewhere in this project) — there is no double-scaling or unit mismatch anywhere in the pipeline.
+
+**Root cause — a training-data imbalance, not a preprocessing bug**: Desharnais has no complexity column at all, so every one of its 77 rows was imputed. The *original* implementation filled all 77 with COCOMO-NASA's single **modal** value (`'h'`), which collapsed **135 of 170 unified rows (79%) onto one complexity value**. That starved the other levels — `'n'` (Nominal) had only 10 real rows total, and the smallest of those was a 10-KLOC/48-month project; `'vl'` had zero rows anywhere in the unified set. A Random Forest can't learn a smooth size-vs-effort trend inside a bucket that thin — a 1-KLOC query with `complexity='n'` had no genuinely comparable neighbor to draw on, so it fell into a sparse leaf anchored on that one 10-KLOC/48-month row, regardless of how much smaller the actual input was. This was confirmable directly: `predict(kloc=1, complexity='vl')`, `'l'`, and `'n'` all returned the **exact same** 44.97-month prediction — proof the tree had no real signal to distinguish between them at small sizes.
+
+**Fix**: `unify_software.py`'s imputation now samples each Desharnais row's complexity from COCOMO-NASA's own empirical complexity **distribution** (seeded `RNG_SEED=42`, reproducible) instead of a single constant — still an honestly-labeled imputation (not a fabricated measurement, still flagged via `source_dataset`), but it no longer manufactures an artificial 79%-single-value skew. Full pipeline (`unify_software.py` -> `train_new_domains.py`) was rerun end to end after the change.
+
+**Sanity table, before vs. after** (`team_experience=Intermediate, complexity=Nominal`):
+
+| KLOC | Before (months) | After (months) |
+|---|---|---|
+| 1 | 44.97 | **25.38** |
+| 5 | 49.64 | **30.64** |
+| 20 | 126.22 | 144.25 |
+| 50 | 317.47 | 423.82 |
+| 200 | 1,749.48 | 1,661.02 |
+| 1,000 | 2,521.54 | 2,407.61 |
+
+Both curves are technically monotonic, but the "after" curve's low end dropped ~44% (44.97 -> 25.38 at 1 KLOC) — a direct, measurable effect of removing the imputation-driven skew, not noise.
+
+**Honest residual limitation — not fixable by retraining**: even after this fix, ~25 months for a 1-KLOC Nominal project is still well above a casual "a few months for a tiny project" expectation. That gap is **not a bug** — COCOMO-NASA is 1980s/90s NASA aerospace/flight software, and its own smallest real recorded project (0.9 KLOC) still took a genuine 8.4 person-months (rated `'h'` complexity, not `'n'` — this dataset has *zero* real Nominal-complexity projects under 10 KLOC). No amount of retraining can make a model predict "2-4 months" when nothing resembling that ever appears in its training data; doing so would mean fabricating a trend the data doesn't support, which this project has consistently avoided elsewhere. This scope limitation (small aerospace-style training set, not general commercial-software norms) should be stated plainly in the paper alongside the fix.
+
+**Team Size — re-confirmed absent, a third time**: re-checked both raw datasets' columns directly (`cocomo_nasa.csv`, `desharnais.csv`) as part of this investigation — neither has ever had a headcount column (COCOMO's people columns are capability *ratings*, Desharnais's are experience in *years*). The retrained model's features are unchanged: `team_experience`, `project_size_kloc`, `complexity`, `source_dataset` — no `team_size`, because there is still nothing honest to add. This matches the exhaustive investigation above and in `app.py`'s docstring; it was not silently dropped, it was never derivable in the first place.
+
+## Results (after the imputation fix above)
 
 | Model | MAE | RMSE | MMRE | PRED(25) |
 |---|---|---|---|---|
-| Linear Regression | 273.40 | 403.39 | 2.953 | 5.9% |
-| **Random Forest (selected)** | 253.74 | 673.00 | 0.810 | 29.4% |
-| XGBoost | 293.19 | 913.65 | 0.800 | 32.4% |
-| SVR | 335.00 | 640.58 | 1.481 | 11.8% |
+| Linear Regression | 256.91 | 344.08 | 5.300 | 11.8% |
+| **Random Forest (selected)** | 267.63 | 691.51 | 1.185 | 38.2% |
+| XGBoost | 304.83 | 918.54 | 1.040 | 35.3% |
+| SVR | 336.27 | 642.80 | 1.470 | 11.8% |
 
-Random Forest wins on MAE outright (253.74, lowest of all 4) and is tree-based, so no explainability fallback was needed here (unlike Construction — see `results/construction_domain_notes.md`). XGBoost has a higher PRED(25) (32.4% vs. 29.4%), but its MAE is 15.55% higher than Random Forest's — well over the 5% tolerance used throughout this project — so Random Forest is kept.
+Random Forest's MAE (267.63) is 4.17% higher than Linear Regression's (256.91) — within the project's 5% MAE tolerance — while its PRED(25) is 26.5 percentage points higher (38.2% vs. 11.8%), so the same selection rule used throughout this project prefers Random Forest. (Before this fix, Random Forest also won on MAE outright; the imputation change shifted MAE slightly in Linear Regression's favor but PRED(25) still decides it — same winning model, now trained on a less-skewed dataset.)
 
 **Honest comparison to the original per-dataset models**: this combined-domain PRED(25) of 29.4% sits between COCOMO-NASA's standalone 42.1% and Desharnais's standalone 25.0% (`results/model_comparison.csv`) — unification traded away some of COCOMO-NASA's stronger individual accuracy for a single, simpler, genuinely-one-model software domain with more total training data. That tradeoff is worth stating plainly in the paper rather than only presenting the upside.
 

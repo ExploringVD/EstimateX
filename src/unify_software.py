@@ -51,9 +51,26 @@ row.
    - Desharnais has NO complexity-like column at all (already
      established in app.py's docstring for the live app). There is no
      honest way to derive one from Desharnais's own columns, so it is
-     imputed with COCOMO-NASA's MODAL complexity rating (the most common
-     value among COCOMO-NASA's 93 projects) — a stated, documented
-     default, not a fabricated measurement.
+     imputed from COCOMO-NASA's own complexity distribution — a stated,
+     documented default, not a fabricated measurement.
+   - REVISED (root-cause fix, see results/software_unification_notes.md
+     "Fixing unrealistic small-project predictions"): this used to fill
+     ALL 77 Desharnais rows with COCOMO-NASA's single MODAL value ('h').
+     That collapsed 79% of the unified 170-row dataset onto one
+     complexity value, starving the other levels — especially 'n'
+     (Nominal) — of enough real, size-diverse examples for a tree model
+     to learn a genuine size-vs-effort trend within them. A tiny/nominal
+     query (e.g. 1 KLOC, Nominal) then fell into whatever sparse leaf
+     the few real 'n' rows created, which happened to be anchored on a
+     10-KLOC/48-month project — producing a wildly inflated prediction
+     regardless of how small the actual input was.
+     Fixed by sampling each Desharnais row's imputed complexity from
+     COCOMO-NASA's own empirical complexity distribution (seeded,
+     reproducible — RNG_SEED below) instead of a single constant. This
+     preserves the same honesty property (still explicitly imputed,
+     still sourced from COCOMO-NASA's real data, still flagged via
+     source_dataset) while removing the artificial value-count skew a
+     single constant created.
 
 4. source_dataset
    - A binary flag (0 = COCOMO-NASA, 1 = Desharnais), added as its own
@@ -79,6 +96,7 @@ from __future__ import annotations
 
 import os
 
+import numpy as np
 import pandas as pd
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
@@ -118,6 +136,11 @@ UNIFIED_NUMERIC_COLS = [TEAM_EXPERIENCE_COL, PROJECT_SIZE_COL]
 # same pattern COCOMO's own ordinal drivers already used in Step 4.
 SCALE_COLS = UNIFIED_NUMERIC_COLS + [COMPLEXITY_COL]
 
+# Seed for the proportional complexity-imputation draw (see decision #3
+# above) — fixed so the unified dataset, and everything trained on it, is
+# reproducible across reruns, same reasoning as split_data.RANDOM_STATE.
+RNG_SEED = 42
+
 _COCOMO_EXPERIENCE_COLS = ["acap", "aexp", "pcap", "vexp", "lexp"]
 _ORDINAL_INDEX = {label: i for i, label in enumerate(COCOMO_ORDINAL_SCALE)}
 
@@ -153,7 +176,8 @@ def _load_desharnais_rows() -> pd.DataFrame:
     effort_months = df[DESHARNAIS_TARGET_COL].astype(float) / HOURS_PER_PERSON_MONTH
 
     # Imputed complexity: Desharnais has no analogous column at all. Filled
-    # in by the caller with COCOMO-NASA's modal `cplx` value, so the
+    # in by the caller from COCOMO-NASA's own complexity DISTRIBUTION (not
+    # a single constant — see decision #3's "REVISED" note), so the
     # imputation source is explicit at the call site, not buried here.
     unified = pd.DataFrame(
         {
@@ -171,10 +195,19 @@ def build_unified_dataframe() -> pd.DataFrame:
     cocomo_rows = _load_cocomo_rows()
     desharnais_rows = _load_desharnais_rows()
 
-    # Impute Desharnais's missing complexity with COCOMO-NASA's mode —
-    # documented decision #3 above.
-    modal_complexity = cocomo_rows[COMPLEXITY_COL].mode(dropna=True).iloc[0]
-    desharnais_rows[COMPLEXITY_COL] = desharnais_rows[COMPLEXITY_COL].fillna(modal_complexity)
+    # Impute Desharnais's missing complexity by sampling from COCOMO-NASA's
+    # own empirical complexity distribution — documented decision #3's
+    # "REVISED" note above. A single constant (the old approach) would
+    # collapse every imputed row onto one value, artificially starving the
+    # other complexity levels of size-diverse examples; sampling
+    # proportionally to COCOMO-NASA's real distribution keeps each level
+    # represented in roughly its real-world proportion instead.
+    complexity_dist = cocomo_rows[COMPLEXITY_COL].value_counts(normalize=True)
+    rng = np.random.RandomState(RNG_SEED)
+    sampled_complexity = rng.choice(
+        complexity_dist.index, size=len(desharnais_rows), p=complexity_dist.to_numpy()
+    )
+    desharnais_rows[COMPLEXITY_COL] = sampled_complexity
 
     combined = pd.concat([cocomo_rows, desharnais_rows], ignore_index=True)
     return combined

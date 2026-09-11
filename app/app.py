@@ -105,12 +105,24 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
    feature doesn't change between requests; which features appear, in
    what order, and at what percentage does. Documented here so this
    isn't mistaken for a fully dynamic natural-language generator.
+
+9. ESTIMATED COMPLETION DATE — SOFTWARE DOMAINS ONLY. Software's form
+   collects a planned start month/year; the results page adds the
+   predicted effort (rounded to the nearest whole month) to it and shows
+   "Estimated completion: around <Month> <Year>" (see
+   compute_estimated_completion). This is a derived, approximate figure
+   labeled as such — it inherits whatever error the underlying effort
+   prediction carries, it is not a second, independently-modeled
+   prediction. Construction has no effort/duration prediction to begin
+   with (assumption 4), so it gets neither the start-date inputs nor a
+   completion-date line at all.
 """
 
 from __future__ import annotations
 
 import os
 import sys
+from datetime import date
 
 import pandas as pd
 from flask import Flask, render_template, request
@@ -183,11 +195,28 @@ ORDINAL_VALUES = {v for v, _ in ORDINAL_OPTIONS}
 LOCALITY_OPTIONS = list(range(1, 21))  # the dataset's own 20 zone codes
 LOCALITY_VALUES = {str(v) for v in LOCALITY_OPTIONS}
 
+# Planned start month/year -> estimated completion date (software domains
+# only — see predict_software / compute_estimated_completion below).
+# Construction never predicts effort/duration at all (assumption 4 in the
+# module docstring), so it gets neither the inputs nor a completion date.
+MONTH_OPTIONS = [
+    ("1", "January"), ("2", "February"), ("3", "March"), ("4", "April"),
+    ("5", "May"), ("6", "June"), ("7", "July"), ("8", "August"),
+    ("9", "September"), ("10", "October"), ("11", "November"), ("12", "December"),
+]
+MONTH_VALUES = {v for v, _ in MONTH_OPTIONS}
+MONTH_NAMES = dict(MONTH_OPTIONS)
+CURRENT_YEAR = date.today().year
+MIN_START_YEAR = 1990
+MAX_START_YEAR = CURRENT_YEAR + 50
+
 DEFAULT_FORM_VALUES = {
     "domain": "software_web",
     "team_experience": "2",
     "project_size_kloc": "50",
     "complexity": "n",
+    "start_month": "1",
+    "start_year": str(CURRENT_YEAR),
     "locality": "1",
     "floor_area_m2": "1220",
     "lot_area_m2": "300",
@@ -327,6 +356,33 @@ def build_factor_sentences(feature_rows: list[dict]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Start date -> estimated completion date (software domains only)
+# ---------------------------------------------------------------------------
+
+def compute_estimated_completion(start_month: int, start_year: int, effort_months: float) -> tuple[str, int]:
+    """Adds the predicted effort (rounded to the nearest whole month) to a
+    planned start month/year, correctly handling month/year rollover.
+
+    Example: start_month=1 (Jan), start_year=2026, effort_months=14.2
+      -> rounded_months = 14
+      -> total = (1 - 1) + 14 = 14
+      -> completion_month_index = 14 % 12 = 2 (0-based) -> March
+      -> completion_year = 2026 + 14 // 12 = 2026 + 1 = 2027
+      -> ("March", 2027)
+
+    This is explicitly an APPROXIMATION derived from the predicted effort
+    (itself an estimate with real error margin, see assumption 7) — never
+    presented as a guaranteed date, see results.html's caption.
+    """
+    rounded_months = round(effort_months)
+    total_months = (start_month - 1) + rounded_months
+    completion_month_index = total_months % 12  # 0-based
+    completion_year = start_year + total_months // 12
+    completion_month_name = MONTH_NAMES[str(completion_month_index + 1)]
+    return completion_month_name, completion_year
+
+
+# ---------------------------------------------------------------------------
 # Prediction pipelines
 # ---------------------------------------------------------------------------
 
@@ -422,6 +478,21 @@ def validate_form(form) -> dict:
         if err:
             errors["project_size_kloc"] = err
 
+        if form.get("start_month") not in MONTH_VALUES:
+            errors["start_month"] = "Please choose a planned start month."
+
+        raw_year = (form.get("start_year") or "").strip()
+        if not raw_year:
+            errors["start_year"] = "Planned start year is required."
+        else:
+            try:
+                year_val = int(raw_year)
+            except ValueError:
+                errors["start_year"] = "Planned start year must be a whole number."
+            else:
+                if year_val < MIN_START_YEAR or year_val > MAX_START_YEAR:
+                    errors["start_year"] = f"Planned start year must be between {MIN_START_YEAR} and {MAX_START_YEAR}."
+
     else:  # construction
         if form.get("locality") not in LOCALITY_VALUES:
             errors["locality"] = "Please choose a locality zone."
@@ -455,6 +526,10 @@ def render_form(form_values, errors):
         domain_options=DOMAIN_OPTIONS,
         ordinal_options=ORDINAL_OPTIONS,
         experience_options=EXPERIENCE_OPTIONS,
+        month_options=MONTH_OPTIONS,
+        current_year=CURRENT_YEAR,
+        min_start_year=MIN_START_YEAR,
+        max_start_year=MAX_START_YEAR,
         locality_options=LOCALITY_OPTIONS,
         max_project_size_kloc=MAX_PROJECT_SIZE_KLOC,
     )
@@ -484,6 +559,20 @@ def predict():
 
     factor_sentences = build_factor_sentences(result["feature_rows"])
 
+    # Estimated completion date — software domains only (assumption 4:
+    # Construction never predicts effort/duration, so there's nothing to
+    # add a start date to). Derived from the SAME predicted effort shown
+    # above, rounded to the nearest whole month (see
+    # compute_estimated_completion's docstring for the rollover math).
+    estimated_completion = None
+    if not result["is_construction"]:
+        completion_month_name, completion_year = compute_estimated_completion(
+            start_month=int(request.form["start_month"]),
+            start_year=int(request.form["start_year"]),
+            effort_months=result["predicted_effort_months"],
+        )
+        estimated_completion = f"{completion_month_name} {completion_year}"
+
     # Software's cost is a real USD estimate (effort x an assumed rate —
     # see assumption 5) — shown in both USD and INR (assumption 6) at a
     # fixed, labeled rate. Construction's cost is NOT a dollar figure at
@@ -509,6 +598,7 @@ def predict():
         predicted_cost_usd=predicted_cost_usd,
         predicted_cost_inr=predicted_cost_inr,
         predicted_cost_native=predicted_cost_native,
+        estimated_completion=estimated_completion,
         inr_per_usd=INR_PER_USD,
         cost_per_person_month=COST_PER_PERSON_MONTH,
         feature_rows=result["feature_rows"],
