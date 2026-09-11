@@ -20,7 +20,22 @@
   <div class="page">
     <header class="site-header anim-in anim-delay-0">
       <div class="wordmark">
-        <img src="{{ url_for('static', filename='logo-icon.png') }}" alt="EstimateX" class="wordmark-icon">
+        <svg class="wordmark-icon" width="60" height="60" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="EstimateX">
+          <rect width="100" height="100" rx="24" fill="#2a1c22"/>
+          <circle cx="50" cy="52" r="36" fill="#f4f2ec"/>
+          <g stroke="#2a1c22" stroke-width="3" stroke-linecap="round">
+            <line x1="50" y1="18" x2="50" y2="24"/>
+            <line x1="50" y1="80" x2="50" y2="86"/>
+            <line x1="16" y1="52" x2="22" y2="52"/>
+            <line x1="78" y1="52" x2="84" y2="52"/>
+          </g>
+          <text x="50" y="66" font-family="Georgia, serif" font-weight="700" font-size="46" fill="#c9c6c0" fill-opacity="0.55" text-anchor="middle">&#8377;</text>
+          <g stroke="#1a1114" stroke-width="5" stroke-linecap="round">
+            <line x1="50" y1="52" x2="50" y2="30"/>
+            <line x1="50" y1="52" x2="66" y2="40"/>
+          </g>
+          <circle cx="50" cy="52" r="4" fill="#1a1114"/>
+        </svg>
         <span class="wordmark-text">Estimate<span class="accent-letter">X</span></span>
       </div>
       <p class="wordmark-tagline">Time &times; Cost — Estimated</p>
