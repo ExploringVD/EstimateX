@@ -14,11 +14,14 @@ dist/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data (raw/processed are large or regenerable — keep out of git)
+# Data (raw/processed are generally large or regenerable — keep out of git)
 data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+# Exception: small, canonical source datasets we want version-controlled as-is
+!data/raw/cocomo_nasa.csv
+!data/raw/desharnais.csv
 
 # Trained models
 models/*.pkl
