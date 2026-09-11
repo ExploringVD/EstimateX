@@ -37,6 +37,11 @@ DATASET_SLUGS = {
     "Desharnais": "desharnais",
 }
 
+# Single source of truth for which model slugs exist and in what order —
+# src/evaluate.py reuses this to know which 4 saved .pkl files to load per
+# dataset, instead of hardcoding the list a second time.
+MODEL_NAMES = ["linear_regression", "random_forest", "xgboost", "svr"]
+
 
 def build_model_factories(random_state: int = RANDOM_STATE) -> dict:
     """Fresh, untrained model instances. A factory (not a shared dict of
