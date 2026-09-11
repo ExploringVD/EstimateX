@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}EstimateX — New Estimate{% endblock %}
 {% block content %}
-<h1 class="page-title">Get an explainable estimate</h1>
-<p class="page-subtitle">Predict your project's time and cost — with a reason attached.</p>
+<h1 class="page-title anim-in anim-delay-1">Get an explainable estimate</h1>
+<p class="page-subtitle anim-in anim-delay-1">Predict your project's time and cost — with a reason attached.</p>
 
-<form method="POST" action="{{ url_for('predict') }}" class="card" novalidate id="estimate-form">
+<form method="POST" action="{{ url_for('predict') }}" class="card anim-in anim-delay-2" novalidate id="estimate-form">
   {% if errors %}
   <div class="error-banner">Please fix the highlighted field{{ 's' if errors|length > 1 else '' }} below.</div>
   {% endif %}
@@ -24,17 +24,12 @@
   </div>
 
   <!-- ============ SOFTWARE FIELD GROUP (Software/Web, Mobile App, Enterprise/Other) ============ -->
-  <!-- Routes to models/final_model_software.pkl (the unified COCOMO-NASA + Desharnais model). -->
-  <div class="form-section" id="software-fields">
+  <!-- Routes to models/final_model_software.pkl (the unified COCOMO-NASA + Desharnais model).
+       Every field here genuinely feeds the model — Team Size and Required Reliability were
+       investigated and removed entirely (see results/software_unification_notes.md) rather
+       than kept as decorative unused inputs. -->
+  <div class="form-section toggle-group" id="software-fields">
     <p class="section-label">Team &amp; Scope</p>
-
-    <div class="field-group">
-      <label for="team_size">Team Size</label>
-      <input type="number" id="team_size" name="team_size" required min="1" max="{{ max_team_size }}" step="1"
-             value="{{ form_values.get('team_size', '') }}">
-      <span class="field-hint">Informational for now — not yet used by the trained model (see app.py).</span>
-      {% if errors.team_size %}<span class="field-error">{{ errors.team_size }}</span>{% endif %}
-    </div>
 
     <div class="field-group">
       <label for="team_experience">Team Experience</label>
@@ -62,23 +57,12 @@
       </select>
       {% if errors.complexity %}<span class="field-error">{{ errors.complexity }}</span>{% endif %}
     </div>
-
-    <div class="field-group">
-      <label for="reliability">Required Reliability</label>
-      <select id="reliability" name="reliability">
-        {% for value, label in ordinal_options %}
-        <option value="{{ value }}" {% if form_values.get('reliability') == value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <span class="field-hint">Not yet used by the unified software model — kept for future extensibility.</span>
-      {% if errors.reliability %}<span class="field-error">{{ errors.reliability }}</span>{% endif %}
-    </div>
   </div>
 
   <!-- ============ CONSTRUCTION FIELD GROUP ============ -->
   <!-- Real columns from results/construction_domain_notes.md (UCI Residential Building
        dataset), not generic placeholders. Routes to models/final_model_construction.pkl. -->
-  <div class="form-section" id="construction-fields" hidden>
+  <div class="form-section toggle-group" id="construction-fields" hidden>
     <p class="section-label">Project Location &amp; Size</p>
 
     <div class="field-group">
@@ -107,7 +91,7 @@
     </div>
   </div>
 
-  <div class="form-section" id="construction-fields-2" hidden>
+  <div class="form-section toggle-group" id="construction-fields-2" hidden>
     <p class="section-label">Cost Estimates &amp; Duration</p>
 
     <div class="field-group">
@@ -156,7 +140,8 @@
   </button>
 </form>
 
-<p class="footer-caption">
+<p class="footer-caption anim-in anim-delay-3">
+  <img src="{{ url_for('static', filename='logo-icon.png') }}" alt="" class="footer-watermark">
   Trained on COCOMO-NASA &amp; Desharnais historical project data (software) and the UCI Residential Building dataset (construction). Every prediction ships with the factors that drove it.
 </p>
 

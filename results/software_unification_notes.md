@@ -6,6 +6,17 @@ Full column-mapping reasoning also lives as inline documentation in `src/unify_s
 
 Before this, "software" was two separately-trained, separately-deployed models (COCOMO-NASA, Desharnais) behind one UI label. This unifies them into a genuinely single software-effort dataset and model, so each of EstimateX's domains — software, construction — is actually one model, not a label hiding several.
 
+## Investigated and confirmed absent: Team Size and Required Reliability
+
+The web app originally showed "Team Size" and "Required Reliability" as form fields flagged "not yet used by the trained model" — a real explainability gap (a field shown to the user should genuinely feed the model, or not be shown at all). Re-investigated both, exhaustively, before deciding what to do:
+
+- **Team Size (headcount)**: neither raw dataset has one. COCOMO-NASA's people-related columns (`acap`, `aexp`, `pcap`, `vexp`, `lexp`) are capability/experience **ratings** (vl–xh), not counts. Desharnais's (`TeamExp`, `ManagerExp`) are experience in **years**, not counts. Checked whether a count could be legitimately *derived* instead (e.g. from `Effort` / `Length` in Desharnais) — rejected, since that would use the training target (`Effort`) to build a feature, a direct leakage violation, not a real pre-project input.
+- **Required Reliability**: already established in Step 10 as absent from Desharnais; re-confirmed here — still no analogous column.
+
+**Decision: both fields were removed from the software form entirely**, applying the same rule the roadmap specified for Reliability to Team Size once it turned out to apply there too — showing a field that doesn't genuinely drive the prediction is worse than not showing it, even if the field "feels" like it should exist. The software form now asks only for what the unified model actually uses: Project Domain, Team Experience, Project Size (KLOC), Project Complexity.
+
+**Proof nothing was missed**: re-ran `src/unify_software.py` and `src/train_new_domains.py` end-to-end after this investigation — `results/model_comparison_new_domains.csv` and `results/feature_importance_software.png` came back **byte-for-byte identical** to before, confirming the 4-feature schema (`team_experience`, `project_size_kloc`, `complexity`, `source_dataset`) was already complete and correct; there was no missing column to add.
+
 ## Unified schema
 
 `team_experience`, `project_size_kloc`, `complexity`, `source_dataset`, target = `effort_person_months`. Chosen to match exactly what the roadmap specified (team size/experience, project size, complexity, target=effort) rather than a superset padded with COCOMO-only columns that would just be constant-imputed on every Desharnais row.

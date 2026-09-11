@@ -26,26 +26,31 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
 2. SOFTWARE FORM FIELDS vs. THE UNIFIED MODEL'S ACTUAL FEATURES. The
    unified software model has exactly 4 features: team_experience,
    project_size_kloc, complexity, source_dataset (see
-   src/unify_software.py). The form still shows Team Size and Required
-   Reliability (per the UI spec), but NEITHER is a feature of the
-   unified model:
-     - Team Size: neither original dataset ever had a headcount column
-       (same reason as before the multi-domain extension) — kept in the
-       form, flagged as informational-only in its hint text.
-     - Required Reliability: the unified schema deliberately kept only
-       the 4 columns the roadmap specified (team size/experience,
-       project size, complexity) — reliability wasn't part of that
-       unified schema. Kept in the form per the UI spec, flagged as
-       informational-only, same honest treatment as Team Size.
-   Complexity and Team Experience map directly onto the model's own
-   `complexity` and `team_experience` features. Project Size (KLOC) maps
-   directly onto `project_size_kloc`.
-   `source_dataset` has no real-world form equivalent — it's a
+   src/unify_software.py). The form asks for EXACTLY the 3 that are
+   user-meaningful (Team Experience, Project Size, Project Complexity) —
+   every field shown genuinely feeds the model, full stop.
+   Team Size and Required Reliability were investigated (re-checked, not
+   assumed) and REMOVED from the form entirely, not kept as decorative
+   unused inputs:
+     - Team Size (headcount): neither raw dataset has one. COCOMO-NASA's
+       people-related columns (acap/aexp/pcap/vexp/lexp) are capability
+       RATINGS, not counts; Desharnais's (TeamExp/ManagerExp) are
+       experience in YEARS, not counts. A derived count (e.g. Effort /
+       Length) was considered and rejected — it would use the training
+       TARGET to build a feature, a leakage violation, not a real input.
+     - Required Reliability: no analogous column in either dataset
+       (already established since Step 10; re-confirmed here).
+   Full investigation and proof (re-ran the whole unification + training
+   pipeline afterward — output came back byte-for-byte identical,
+   confirming there was truly nothing to add) is in
+   results/software_unification_notes.md.
+   `source_dataset` has no real-world form equivalent either — it's a
    training-data-provenance flag, not a property of a new hypothetical
-   project. It's set to the MODE of the unified training data (computed
-   at startup, see SOFTWARE_SOURCE_DEFAULT) — its feature importance is
-   the lowest of the 4 (~0.005, see results/feature_importance_software.png),
-   so this default has minimal effect on predictions either way.
+   project, so it isn't a form field at all. It's set to the MODE of the
+   unified training data (computed at startup, see
+   SOFTWARE_SOURCE_DEFAULT) — its feature importance is the lowest of
+   the 4 (~0.005, see results/feature_importance_software.png), so this
+   default has minimal effect on predictions either way.
 
 3. CONSTRUCTION FORM FIELDS. All 8 of the construction model's real
    features (locality, floor area, lot area, the three preliminary-cost
@@ -65,21 +70,34 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
 5. PREDICTED COST (software domains). Neither original software dataset
    has a currency column — only EFFORT. "Predicted Cost" for software is
    a DERIVED, illustrative figure: effort (in person-months) x an
-   assumed COST_PER_PERSON_MONTH constant. Construction's cost, by
-   contrast, is the model's actual predicted target (V-10, "10000 IRR"
-   units per results/construction_domain_notes.md) — displayed with a
-   "$" prefix to match the UI's shared "Predicted Cost" stat, which is
-   an approximation across a currency/unit boundary worth being upfront
-   about rather than silently implying it's USD.
+   assumed COST_PER_PERSON_MONTH constant, in USD. Construction's cost,
+   by contrast, is the model's actual predicted target (V-10, "10000
+   IRR" units per results/construction_domain_notes.md) — genuinely NOT
+   a dollar figure, so it is shown in its own native unit with an
+   explicit label, not converted or given a "$" (see #8 below for why
+   dual-currency display doesn't extend to Construction).
 
-6. "WHAT DROVE THIS ESTIMATE" is per-request, not just the model's
+6. DUAL CURRENCY DISPLAY (₹ / $) — SOFTWARE DOMAINS ONLY. Software's
+   predicted cost genuinely is a USD figure (assumption 5), so showing
+   it in both USD and INR at a fixed, labeled rate (INR_PER_USD below)
+   is a legitimate display-only conversion. Construction's predicted
+   cost is NOT a USD figure to begin with — it's the source dataset's
+   native Iranian Rial unit — so running it through a USD-to-INR rate
+   would chain two unrelated currencies (IRR -> a guessed USD rate ->
+   INR) through a conversion this project has no grounded rate for,
+   compounding one approximation with another rather than adding real
+   information. Construction's cost is therefore left in its existing,
+   clearly-labeled native-unit display; only software's ₹/$ figures are
+   dual-currency.
+
+7. "WHAT DROVE THIS ESTIMATE" is per-request, not just the model's
    global .feature_importances_ (which is the same ranking every time).
    Each feature's contribution here is approximated as
    importance x |this request's scaled value for that feature| — a
    cheap heuristic (not SHAP/LIME), documented as an approximation, not
    a formal per-instance attribution method.
 
-7. THE NUMBERED FACTOR SENTENCES (Part C) pair each request's actual
+8. THE NUMBERED FACTOR SENTENCES pair each request's actual
    top-ranked features and percentages (real, computed per request) with
    a per-feature-TYPE explanatory clause (why that kind of factor
    generally moves an estimate — e.g. "larger codebases require more
@@ -130,9 +148,13 @@ PROCESSED_DIR = os.path.join(PROJECT_ROOT, "data", "processed")
 
 COST_PER_PERSON_MONTH = 10_000  # illustrative, software domains only — see assumption 5
 
+# Fixed, labeled conversion rate — a static demo rate, not a live fetch,
+# per the roadmap's explicit instruction. Shown alongside every INR figure
+# so it's never mistaken for a real-time rate.
+INR_PER_USD = 85
+
 TOP_N_FEATURES = 5
 
-MAX_TEAM_SIZE = 2_000
 MAX_PROJECT_SIZE_KLOC = 100_000
 
 DOMAIN_OPTIONS = [
@@ -163,11 +185,9 @@ LOCALITY_VALUES = {str(v) for v in LOCALITY_OPTIONS}
 
 DEFAULT_FORM_VALUES = {
     "domain": "software_web",
-    "team_size": "8",
     "team_experience": "2",
     "project_size_kloc": "50",
     "complexity": "n",
-    "reliability": "n",
     "locality": "1",
     "floor_area_m2": "1220",
     "lot_area_m2": "300",
@@ -395,14 +415,9 @@ def validate_form(form) -> dict:
     if domain in SOFTWARE_DOMAIN_VALUES:
         if form.get("complexity") not in ORDINAL_VALUES:
             errors["complexity"] = "Please choose a complexity level."
-        if form.get("reliability") not in ORDINAL_VALUES:
-            errors["reliability"] = "Please choose a reliability level."
         if form.get("team_experience") not in EXPERIENCE_VALUES:
             errors["team_experience"] = "Please choose a team experience level."
 
-        err = _validate_positive_number(form.get("team_size"), "Team size", integer=True, max_value=MAX_TEAM_SIZE)
-        if err:
-            errors["team_size"] = err
         err = _validate_positive_number(form.get("project_size_kloc"), "Project size", max_value=MAX_PROJECT_SIZE_KLOC)
         if err:
             errors["project_size_kloc"] = err
@@ -441,7 +456,6 @@ def render_form(form_values, errors):
         ordinal_options=ORDINAL_OPTIONS,
         experience_options=EXPERIENCE_OPTIONS,
         locality_options=LOCALITY_OPTIONS,
-        max_team_size=MAX_TEAM_SIZE,
         max_project_size_kloc=MAX_PROJECT_SIZE_KLOC,
     )
 
@@ -471,14 +485,19 @@ def predict():
     factor_sentences = build_factor_sentences(result["feature_rows"])
 
     # Software's cost is a real USD estimate (effort x an assumed rate —
-    # see assumption 5); Construction's is the model's native-unit output
-    # (x10,000 IRR, see results/construction_domain_notes.md) — formatted
-    # differently here rather than both wearing a "$" that would falsely
-    # imply Construction's figure is US dollars too.
+    # see assumption 5) — shown in both USD and INR (assumption 6) at a
+    # fixed, labeled rate. Construction's cost is NOT a dollar figure at
+    # all (it's the source dataset's native Iranian Rial unit), so it
+    # keeps its own clearly-labeled native-unit display rather than being
+    # forced through an unrelated currency conversion (assumption 6).
     if result["is_construction"]:
-        predicted_cost_display = f"{result['predicted_cost']:,.0f}"
+        predicted_cost_usd = None
+        predicted_cost_inr = None
+        predicted_cost_native = round(result["predicted_cost"], 0)
     else:
-        predicted_cost_display = f"${result['predicted_cost']:,.0f}"
+        predicted_cost_usd = round(result["predicted_cost"], 0)
+        predicted_cost_inr = round(result["predicted_cost"] * INR_PER_USD, 0)
+        predicted_cost_native = None
 
     return render_template(
         "results.html",
@@ -487,7 +506,10 @@ def predict():
         predicted_effort_months=(
             round(result["predicted_effort_months"], 1) if result["predicted_effort_months"] is not None else None
         ),
-        predicted_cost_display=predicted_cost_display,
+        predicted_cost_usd=predicted_cost_usd,
+        predicted_cost_inr=predicted_cost_inr,
+        predicted_cost_native=predicted_cost_native,
+        inr_per_usd=INR_PER_USD,
         cost_per_person_month=COST_PER_PERSON_MONTH,
         feature_rows=result["feature_rows"],
         factor_sentences=factor_sentences,
