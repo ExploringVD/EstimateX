@@ -12,12 +12,14 @@ No feature importance here — that's Step 8.
 
 from __future__ import annotations
 
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from split_data import DATASET_CONFIGS
+from split_data import DATASET_CONFIGS, split_features_target
 from train_models import DATASET_SLUGS, MODEL_NAMES
 from preprocessing import load_artifact
 
@@ -96,9 +98,7 @@ def compute_all_metrics(y_true, y_pred) -> dict:
 
 def load_test_set(test_path: str, target_col: str):
     test_df = pd.read_csv(test_path)
-    X_test = test_df.drop(columns=[target_col])
-    y_test = test_df[target_col]
-    return X_test, y_test
+    return split_features_target(test_df, target_col)
 
 
 def evaluate_dataset(name: str, test_path: str, target_col: str) -> list[dict]:
@@ -202,8 +202,6 @@ def plot_mae_comparison(results_df: pd.DataFrame, dataset: str, output_path: str
 
 
 if __name__ == "__main__":
-    import os
-
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     print("EstimateX — Step 7 model evaluation (test set)")

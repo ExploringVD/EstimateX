@@ -44,6 +44,21 @@ DATASET_CONFIGS = [
 ]
 
 
+def split_features_target(df: pd.DataFrame, target_col: str):
+    """Separate a dataframe into (X, y): every column except `target_col`
+    as the feature matrix, `target_col` itself as the target series.
+
+    Shared by every place in the project that needs to pull features and
+    target apart from an already-assembled CSV (the initial split below,
+    and later reloading of the saved train/test files in
+    src/train_models.py and src/evaluate.py) — kept as one function so
+    that logic isn't copy-pasted across files.
+    """
+    X = df.drop(columns=[target_col])
+    y = df[target_col]
+    return X, y
+
+
 def split_dataframe(
     df: pd.DataFrame,
     target_col: str,
@@ -57,8 +72,7 @@ def split_dataframe(
     ever call `train_test_split`, so every model in Step 6 is trained and
     evaluated on an identical split.
     """
-    X = df.drop(columns=[target_col])
-    y = df[target_col]
+    X, y = split_features_target(df, target_col)
     return train_test_split(X, y, test_size=test_size, random_state=random_state)
 
 
