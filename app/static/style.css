@@ -1,21 +1,20 @@
 :root {
-  --bg: oklch(98% 0.004 255);
-  --card: oklch(100% 0 0);
-  --border: oklch(90% 0.012 255);
-  --border-soft: oklch(94% 0.008 255);
-  --ink: oklch(22% 0.02 255);
-  --ink-soft: oklch(46% 0.018 255);
-  --ink-faint: oklch(62% 0.014 255);
-  --track: oklch(95% 0.006 255);
-  --accent: #2C5FCB;
-  /* Complementary soft tone for the background blobs, echoing the real
-     logo's amber "X" — kept subtle, never used for text/UI elements. */
-  --accent-warm: #f5a623;
+  --bg: #0d0f16;
+  --bg-2: #14171f;
+  --glass: rgba(255, 255, 255, 0.045);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --ink: #f4f2ec;
+  --ink-soft: #a7a9b4;
+  --ink-faint: #6c6f7c;
+  --gold: #e3a23e;
+  --rust: #c9662f;
+  --track: rgba(255, 255, 255, 0.08);
 
   --font-heading: "Space Grotesk", sans-serif;
   --font-body: "IBM Plex Sans", sans-serif;
 
-  --shadow: 0 1px 1px rgba(0, 0, 0, 0.05), 0 24px 48px -12px rgba(0, 0, 0, 0.08);
+  --gradient-accent: linear-gradient(135deg, var(--gold), var(--rust));
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.35), 0 0 60px -8px rgba(227, 162, 62, 0.18);
 }
 
 * {
@@ -40,10 +39,12 @@ body {
   z-index: 1;
 }
 
-/* Animated background — 3 large, soft blurred blobs, very slow drift.
-   Purely decorative (aria-hidden), fixed behind all content. */
+/* Animated background — 3 large, soft blurred glow orbs, very slow
+   drift. Purely decorative (aria-hidden), fixed behind all content.
+   GPU-cheap: only transform/opacity are animated, nothing that
+   triggers layout. */
 
-.bg-blobs {
+.bg-orbs {
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -51,56 +52,60 @@ body {
   pointer-events: none;
 }
 
-.blob {
+.orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
   will-change: transform;
 }
 
-.blob-1 {
-  width: 480px;
-  height: 480px;
-  top: -120px;
-  left: -100px;
-  background: var(--accent);
-  opacity: 0.18;
-  animation: drift1 18s ease-in-out infinite alternate;
-}
-
-.blob-2 {
-  width: 420px;
-  height: 420px;
-  top: 30%;
-  right: -140px;
-  background: var(--accent-warm);
-  opacity: 0.15;
-  animation: drift2 22s ease-in-out infinite alternate;
-}
-
-.blob-3 {
-  width: 380px;
-  height: 380px;
-  bottom: -140px;
-  left: 20%;
-  background: var(--accent);
+.orb-1 {
+  width: 620px;
+  height: 620px;
+  top: -160px;
+  left: -140px;
+  background: radial-gradient(circle, var(--gold) 0%, transparent 70%);
   opacity: 0.16;
-  animation: drift3 20s ease-in-out infinite alternate;
+  filter: blur(100px);
+  animation: driftOrb1 22s ease-in-out infinite alternate;
 }
 
-@keyframes drift1 {
-  from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(60px, 40px) scale(1.12); }
+.orb-2 {
+  width: 560px;
+  height: 560px;
+  top: 32%;
+  right: -180px;
+  background: radial-gradient(circle, var(--rust) 0%, transparent 70%);
+  opacity: 0.14;
+  filter: blur(110px);
+  animation: driftOrb2 25s ease-in-out infinite alternate;
+  animation-delay: -6s;
 }
 
-@keyframes drift2 {
-  from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(-50px, 60px) scale(1.08); }
+.orb-3 {
+  width: 500px;
+  height: 500px;
+  bottom: -180px;
+  left: 18%;
+  background: radial-gradient(circle, var(--gold) 0%, transparent 70%);
+  opacity: 0.15;
+  filter: blur(90px);
+  animation: driftOrb3 20s ease-in-out infinite alternate;
+  animation-delay: -12s;
 }
 
-@keyframes drift3 {
+@keyframes driftOrb1 {
   from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(40px, -50px) scale(1.1); }
+  to   { transform: translate(70px, 50px) scale(1.12); }
+}
+
+@keyframes driftOrb2 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-60px, 70px) scale(1.08); }
+}
+
+@keyframes driftOrb3 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(50px, -60px) scale(1.1); }
 }
 
 /* Entrance animations — fade + slide up, staggered by delay class */
@@ -129,7 +134,7 @@ body {
   .anim-in {
     animation: none;
   }
-  .blob {
+  .orb {
     animation: none;
   }
 }
@@ -143,27 +148,29 @@ body {
 .wordmark {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .wordmark-icon {
   flex-shrink: 0;
-  height: 40px;
-  width: 40px;
-  border-radius: 9px;
+  height: 44px;
+  width: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  object-fit: cover;
   display: block;
 }
 
 .wordmark-text {
   font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 1.7rem;
+  font-weight: 600;
+  font-size: 1.8rem;
   letter-spacing: -0.02em;
   color: var(--ink);
 }
 
 .wordmark-text .accent-letter {
-  color: var(--accent);
+  color: var(--gold);
 }
 
 .tagline {
@@ -175,24 +182,27 @@ body {
 h1.page-title {
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 1.9rem;
-  letter-spacing: -0.01em;
-  margin: 28px 0 6px;
+  font-size: 2.75rem;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  margin: 32px 0 10px;
   color: var(--ink);
 }
 
 .page-subtitle {
   margin: 0 0 28px;
   color: var(--ink-soft);
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
-/* Cards */
+/* Cards — glassmorphism */
 
 .card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 20px;
   box-shadow: var(--shadow);
   padding: 36px;
   margin-bottom: 24px;
@@ -200,7 +210,7 @@ h1.page-title {
 
 .card h2 {
   font-family: var(--font-heading);
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   font-weight: 600;
   margin: 0 0 20px;
   color: var(--ink);
@@ -271,18 +281,23 @@ h1.page-title {
   font-size: 0.95rem;
   color: var(--ink);
   padding: 11px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-radius: 8px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.03);
   width: 100%;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field-group select option {
+  background: var(--bg-2);
+  color: var(--ink);
 }
 
 .field-group select:focus,
 .field-group input[type="number"]:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(44, 95, 203, 0.12);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(227, 162, 62, 0.18);
 }
 
 .field-hint {
@@ -294,13 +309,13 @@ h1.page-title {
 .field-error {
   margin-top: 6px;
   font-size: 0.8rem;
-  color: #b91c1c;
+  color: #ff8a8a;
 }
 
 .error-banner {
-  background: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
+  background: rgba(255, 90, 90, 0.1);
+  color: #ff9a9a;
+  border: 1px solid rgba(255, 90, 90, 0.25);
   border-radius: 10px;
   padding: 12px 16px;
   margin-bottom: 20px;
@@ -324,12 +339,11 @@ h1.page-title {
   text-decoration: none;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
 
 .btn:hover {
   transform: translateY(-1px) scale(1.01);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .btn:active {
@@ -338,23 +352,26 @@ h1.page-title {
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: var(--gradient-accent);
+  color: var(--bg);
+  border-color: transparent;
 }
 
 .btn-primary:hover {
-  background: #234ea3;
+  filter: brightness(1.08);
+  box-shadow: 0 6px 24px rgba(227, 162, 62, 0.3);
 }
 
 .btn-secondary {
-  background: #fff;
+  background: var(--glass);
   color: var(--ink);
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .btn-secondary:hover {
-  background: var(--bg);
+  background: rgba(255, 255, 255, 0.07);
   border-color: var(--ink-faint);
 }
 
@@ -387,7 +404,7 @@ h1.page-title {
 
 .result-value {
   font-family: var(--font-heading);
-  font-size: 2.5rem;
+  font-size: 2.6rem;
   font-weight: 700;
   color: var(--ink);
   line-height: 1.1;
@@ -462,7 +479,7 @@ h1.page-title {
 
 .fi-bar-fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--gradient-accent);
   border-radius: 6px;
   width: 0;
   transition: width 0.8s ease-out;
@@ -499,7 +516,7 @@ h1.page-title {
   content: counter(factor) ".";
   position: absolute;
   left: 0;
-  color: var(--accent);
+  color: var(--gold);
   font-weight: 600;
   font-family: var(--font-heading);
 }
@@ -523,9 +540,11 @@ h1.page-title {
   display: block;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 8px;
+  overflow: hidden;
+  object-fit: cover;
   margin: 0 auto 10px;
-  opacity: 0.35;
+  opacity: 0.45;
 }
 
 /* Responsive */
@@ -540,7 +559,7 @@ h1.page-title {
   }
 
   h1.page-title {
-    font-size: 1.6rem;
+    font-size: 2rem;
   }
 
   .result-grid {
@@ -552,11 +571,11 @@ h1.page-title {
   }
 
   .wordmark-icon {
-    height: 34px;
-    width: 34px;
+    height: 36px;
+    width: 36px;
   }
 
-  .blob {
-    filter: blur(50px);
+  .orb {
+    filter: blur(60px);
   }
 }
