@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}EstimateX — Your Estimate{% endblock %}
+{% block content %}
+<div class="card result-card">
+  <div class="result-grid">
+    <div class="result-stat">
+      <div class="result-value">{{ predicted_effort_months }}</div>
+      <div class="result-label">Predicted Effort (months)</div>
+    </div>
+    <div class="result-stat">
+      <div class="result-value">${{ "{:,.0f}".format(predicted_cost) }}</div>
+      <div class="result-label">Predicted Cost</div>
+    </div>
+  </div>
+  <p class="result-caption">
+    Domain: {{ domain_label }} · Cost assumes ${{ "{:,.0f}".format(cost_per_person_month) }}/person-month (illustrative — adjust in app.py)
+  </p>
+</div>
+
+<div class="card">
+  <h2>What drove this estimate</h2>
+  <div class="fi-list">
+    {% for row in feature_rows %}
+    <div class="fi-row">
+      <span class="fi-label">{{ row.label }}</span>
+      <div class="fi-bar-track">
+        <div class="fi-bar-fill" style="width: {{ row.pct }}%; opacity: {{ row.opacity }};"></div>
+      </div>
+      <span class="fi-pct">{{ row.pct }}%</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="fi-summary">{{ summary_sentence }}</p>
+  <a href="{{ url_for('index') }}" class="btn-primary btn-link">Try another estimate</a>
+</div>
+{% endblock %}

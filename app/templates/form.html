@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}EstimateX — New Estimate{% endblock %}
+{% block content %}
+<form method="POST" action="{{ url_for('predict') }}" class="card" novalidate>
+  {% if errors %}
+  <div class="error-banner">Please fix the highlighted field{{ 's' if errors|length > 1 else '' }} below.</div>
+  {% endif %}
+
+  <div class="form-section">
+    <h2>Project details</h2>
+
+    <div class="field-group">
+      <label for="domain">Project Domain</label>
+      <select id="domain" name="domain">
+        {% for value, label in domain_options %}
+        <option value="{{ value }}" {% if form_values.get('domain') == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.domain %}<span class="field-error">{{ errors.domain }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="complexity">Project Complexity</label>
+      <select id="complexity" name="complexity">
+        {% for value, label in ordinal_options %}
+        <option value="{{ value }}" {% if form_values.get('complexity') == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.complexity %}<span class="field-error">{{ errors.complexity }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="reliability">Required Reliability</label>
+      <select id="reliability" name="reliability">
+        {% for value, label in ordinal_options %}
+        <option value="{{ value }}" {% if form_values.get('reliability') == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.reliability %}<span class="field-error">{{ errors.reliability }}</span>{% endif %}
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h2>Team &amp; Scope</h2>
+
+    <div class="field-group">
+      <label for="team_size">Team Size</label>
+      <input type="number" id="team_size" name="team_size" min="1" step="1"
+             value="{{ form_values.get('team_size', '') }}">
+      <span class="field-hint">Informational for now — not yet used by either trained model (see app.py).</span>
+      {% if errors.team_size %}<span class="field-error">{{ errors.team_size }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="team_experience">Team Experience</label>
+      <select id="team_experience" name="team_experience">
+        {% for value, label in experience_options %}
+        <option value="{{ value }}" {% if form_values.get('team_experience') == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.team_experience %}<span class="field-error">{{ errors.team_experience }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="project_size_kloc">Estimated Project Size (KLOC)</label>
+      <input type="number" id="project_size_kloc" name="project_size_kloc" min="0.1" step="0.1"
+             value="{{ form_values.get('project_size_kloc', '') }}">
+      {% if errors.project_size_kloc %}<span class="field-error">{{ errors.project_size_kloc }}</span>{% endif %}
+    </div>
+  </div>
+
+  <button type="submit" class="btn-primary">Get estimate</button>
+</form>
+{% endblock %}

@@ -1,0 +1,9 @@
+# Runtime dependencies for app/app.py only — a lean subset of the root
+# requirements.txt, enough to serve predictions without the EDA/training
+# tooling (jupyter, matplotlib, seaborn, xgboost, streamlit) that the
+# rest of the project needs but this Flask app doesn't.
+flask
+pandas
+numpy
+scikit-learn
+joblib
