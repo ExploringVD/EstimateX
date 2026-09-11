@@ -157,6 +157,7 @@ DOMAIN_OPTIONS = [
     ("cocomo", "Aerospace / Embedded Systems (NASA-style)"),
     ("desharnais", "Business / Information Systems"),
 ]
+DOMAIN_LABELS = dict(DOMAIN_OPTIONS)
 ORDINAL_OPTIONS = [
     ("vl", "Very Low"), ("l", "Low"), ("n", "Nominal"),
     ("h", "High"), ("vh", "Very High"), ("xh", "Extra High"),
@@ -244,42 +245,39 @@ DESHARNAIS_SCALER = load_artifact(f"{MODELS_DIR}/final_scaler_desharnais.pkl")
 DESHARNAIS_ENCODER = load_artifact(f"{MODELS_DIR}/final_encoder_desharnais.pkl")
 
 
-def compute_cocomo_defaults() -> dict:
-    """Typical-project defaults for every COCOMO-NASA column the form
-    doesn't collect: median for numeric columns, mode for categorical —
-    computed from the real (cleaned, same as Step 4) training data, not
-    guessed.
+def compute_defaults(raw_path: str, id_col: str, target_col: str, numeric_cols: list[str], categorical_cols: list[str]) -> dict:
+    """Typical-project defaults for every column the form doesn't collect:
+    median for numeric columns, mode for categorical — computed from the
+    real (cleaned, same as Step 4) training data, not guessed. Shared by
+    both datasets; only the column lists differ.
     """
-    raw_df = load_raw_csv(f"{RAW_DIR}/cocomo_nasa.csv")
-    df = raw_df.drop(columns=[COCOMO_ID_COL, COCOMO_TARGET_COL])
-    categorical_cols = COCOMO_ONEHOT_COLS + COCOMO_ORDINAL_COLS + [COCOMO_BINARY_COL]
-    df, _ = handle_missing_values(df, numeric_cols=COCOMO_NUMERIC_COLS, categorical_cols=categorical_cols)
+    raw_df = load_raw_csv(raw_path)
+    df = raw_df.drop(columns=[id_col, target_col])
+    df, _ = handle_missing_values(df, numeric_cols=numeric_cols, categorical_cols=categorical_cols)
 
     defaults = {}
     for col in df.columns:
-        if col in COCOMO_NUMERIC_COLS:
+        if col in numeric_cols:
             defaults[col] = float(df[col].median())
         else:
             defaults[col] = df[col].mode(dropna=True).iloc[0]
     return defaults
 
 
-def compute_desharnais_defaults() -> dict:
-    raw_df = load_raw_csv(f"{RAW_DIR}/desharnais.csv")
-    df = raw_df.drop(columns=[DESHARNAIS_ID_COL, DESHARNAIS_TARGET_COL])
-    df, _ = handle_missing_values(df, numeric_cols=DESHARNAIS_NUMERIC_COLS, categorical_cols=DESHARNAIS_ONEHOT_COLS)
-
-    defaults = {}
-    for col in df.columns:
-        if col in DESHARNAIS_NUMERIC_COLS:
-            defaults[col] = float(df[col].median())
-        else:
-            defaults[col] = df[col].mode(dropna=True).iloc[0]
-    return defaults
-
-
-COCOMO_DEFAULTS = compute_cocomo_defaults()
-DESHARNAIS_DEFAULTS = compute_desharnais_defaults()
+COCOMO_DEFAULTS = compute_defaults(
+    f"{RAW_DIR}/cocomo_nasa.csv",
+    COCOMO_ID_COL,
+    COCOMO_TARGET_COL,
+    numeric_cols=COCOMO_NUMERIC_COLS,
+    categorical_cols=COCOMO_ONEHOT_COLS + COCOMO_ORDINAL_COLS + [COCOMO_BINARY_COL],
+)
+DESHARNAIS_DEFAULTS = compute_defaults(
+    f"{RAW_DIR}/desharnais.csv",
+    DESHARNAIS_ID_COL,
+    DESHARNAIS_TARGET_COL,
+    numeric_cols=DESHARNAIS_NUMERIC_COLS,
+    categorical_cols=DESHARNAIS_ONEHOT_COLS,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +357,7 @@ def predict_cocomo(complexity: str, reliability: str, team_experience: str, kloc
     feature_rows = rank_features_for_request(COCOMO_MODEL, transformed)
 
     return {
-        "domain_label": dict(DOMAIN_OPTIONS)["cocomo"],
+        "domain_label": DOMAIN_LABELS["cocomo"],
         "predicted_effort_months": predicted_effort_months,
         "feature_rows": feature_rows,
     }
@@ -386,7 +384,7 @@ def predict_desharnais(team_experience: str, kloc: float) -> dict:
     feature_rows = rank_features_for_request(DESHARNAIS_MODEL, transformed)
 
     return {
-        "domain_label": dict(DOMAIN_OPTIONS)["desharnais"],
+        "domain_label": DOMAIN_LABELS["desharnais"],
         "predicted_effort_months": predicted_effort_months,
         "feature_rows": feature_rows,
     }
@@ -400,7 +398,7 @@ def validate_form(form) -> dict:
     """Returns a dict of field -> error message. Empty dict means valid."""
     errors = {}
 
-    if form.get("domain") not in dict(DOMAIN_OPTIONS):
+    if form.get("domain") not in DOMAIN_LABELS:
         errors["domain"] = "Please choose a project domain."
     if form.get("complexity") not in ORDINAL_VALUES:
         errors["complexity"] = "Please choose a complexity level."
