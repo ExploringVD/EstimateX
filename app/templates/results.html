@@ -1,29 +1,34 @@
 {% extends "base.html" %}
 {% block title %}EstimateX — Your Estimate{% endblock %}
 {% block content %}
-<h1 class="page-title">Your estimate</h1>
-<p class="page-subtitle">{{ domain_label }}</p>
+<h1 class="page-title anim-in anim-delay-1">Your estimate</h1>
+<p class="page-subtitle anim-in anim-delay-1">{{ domain_label }}</p>
 
-<div class="card">
+<div class="card anim-in anim-delay-2">
   <div class="result-grid">
     {% if not is_construction %}
     <div class="result-stat">
-      <div class="result-value">{{ predicted_effort_months }}</div>
+      <div class="result-value" data-counter data-final="{{ predicted_effort_months }}" data-decimals="1">0.0</div>
       <div class="result-label">Predicted Effort (months)</div>
     </div>
     {% endif %}
     <div class="result-stat">
-      <div class="result-value">{{ predicted_cost_display }}</div>
+      {% if is_construction %}
+      <div class="result-value" data-counter data-final="{{ predicted_cost_native }}" data-decimals="0">0</div>
+      {% else %}
+      <div class="result-value" data-counter data-final="{{ predicted_cost_inr }}" data-decimals="0" data-locale="en-IN" data-prefix="₹">₹0</div>
+      <div class="result-value-secondary" data-counter data-final="{{ predicted_cost_usd }}" data-decimals="0" data-prefix="≈ $">≈ $0</div>
+      {% endif %}
       <div class="result-label">Predicted Cost</div>
     </div>
   </div>
   {% if not is_construction %}
   <p class="result-caption">
-    Cost assumes ${{ "{:,.0f}".format(cost_per_person_month) }}/person-month (illustrative — adjust in app.py)
+    Cost assumes ${{ "{:,.0f}".format(cost_per_person_month) }}/person-month (illustrative — adjust in app.py), converted at ₹{{ inr_per_usd }}/$1 (static demo rate)
   </p>
   {% else %}
   <p class="result-caption">
-    Cost shown in the dataset's native units (×10,000 Iranian Rial) — not US dollars.
+    Cost shown in the dataset's native units (×10,000 Iranian Rial) — not US dollars or Indian Rupees.
   </p>
   <p class="result-note">
     Time-to-completion prediction isn't available for Construction yet — the training data doesn't include project duration.
@@ -31,7 +36,7 @@
   {% endif %}
 </div>
 
-<div class="card">
+<div class="card anim-in anim-delay-3">
   <h2>What drove this estimate</h2>
   <div class="fi-list">
     {% for row in feature_rows %}
@@ -41,7 +46,7 @@
         <span class="fi-pct">{{ row.pct }}%</span>
       </div>
       <div class="fi-bar-track">
-        <div class="fi-bar-fill" style="width: {{ row.pct }}%; opacity: {{ row.opacity }};"></div>
+        <div class="fi-bar-fill" data-bar-width="{{ row.pct }}" data-bar-index="{{ loop.index0 }}" style="width: 0%; opacity: {{ row.opacity }};"></div>
       </div>
     </div>
     {% endfor %}
@@ -60,4 +65,6 @@
     Try another estimate
   </a>
 </div>
+
+<script src="{{ url_for('static', filename='results.js') }}"></script>
 {% endblock %}

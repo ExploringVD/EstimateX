@@ -8,6 +8,9 @@
   --ink-faint: oklch(62% 0.014 255);
   --track: oklch(95% 0.006 255);
   --accent: #2C5FCB;
+  /* Complementary soft tone for the background blobs, echoing the real
+     logo's amber "X" — kept subtle, never used for text/UI elements. */
+  --accent-warm: #f5a623;
 
   --font-heading: "Space Grotesk", sans-serif;
   --font-body: "IBM Plex Sans", sans-serif;
@@ -25,12 +28,110 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  position: relative;
+  overflow-x: hidden;
 }
 
 .page {
   max-width: 620px;
   margin: 0 auto;
   padding: 56px 20px 72px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Animated background — 3 large, soft blurred blobs, very slow drift.
+   Purely decorative (aria-hidden), fixed behind all content. */
+
+.bg-blobs {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  will-change: transform;
+}
+
+.blob-1 {
+  width: 480px;
+  height: 480px;
+  top: -120px;
+  left: -100px;
+  background: var(--accent);
+  opacity: 0.18;
+  animation: drift1 18s ease-in-out infinite alternate;
+}
+
+.blob-2 {
+  width: 420px;
+  height: 420px;
+  top: 30%;
+  right: -140px;
+  background: var(--accent-warm);
+  opacity: 0.15;
+  animation: drift2 22s ease-in-out infinite alternate;
+}
+
+.blob-3 {
+  width: 380px;
+  height: 380px;
+  bottom: -140px;
+  left: 20%;
+  background: var(--accent);
+  opacity: 0.16;
+  animation: drift3 20s ease-in-out infinite alternate;
+}
+
+@keyframes drift1 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(60px, 40px) scale(1.12); }
+}
+
+@keyframes drift2 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-50px, 60px) scale(1.08); }
+}
+
+@keyframes drift3 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(40px, -50px) scale(1.1); }
+}
+
+/* Entrance animations — fade + slide up, staggered by delay class */
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-in {
+  animation: fadeSlideUp 0.5s ease-out both;
+}
+
+.anim-delay-0 { animation-delay: 0ms; }
+.anim-delay-1 { animation-delay: 80ms; }
+.anim-delay-2 { animation-delay: 180ms; }
+.anim-delay-3 { animation-delay: 280ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-in {
+    animation: none;
+  }
+  .blob {
+    animation: none;
+  }
 }
 
 /* Header / wordmark */
@@ -47,6 +148,10 @@ body {
 
 .wordmark-icon {
   flex-shrink: 0;
+  height: 40px;
+  width: 40px;
+  border-radius: 9px;
+  display: block;
 }
 
 .wordmark-text {
@@ -118,6 +223,27 @@ h1.page-title {
   margin-bottom: 30px;
 }
 
+/* Domain field-group toggle: fade/slide instead of an instant snap.
+   .toggle-hidden is added first (starts the fade-out), then JS sets the
+   `hidden` attribute after the transition finishes. .no-transition
+   suppresses the transition only for the very first render, so the form
+   doesn't visibly animate on page load. */
+
+.toggle-group {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toggle-group.toggle-hidden {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.toggle-group.no-transition {
+  transition: none;
+}
+
 .form-section:last-of-type {
   margin-bottom: 26px;
 }
@@ -149,6 +275,7 @@ h1.page-title {
   border-radius: 8px;
   background: #fff;
   width: 100%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .field-group select:focus,
@@ -197,13 +324,23 @@ h1.page-title {
   text-decoration: none;
   cursor: pointer;
   border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
 }
 
 .btn-primary {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
-  transition: background 0.15s ease;
 }
 
 .btn-primary:hover {
@@ -214,12 +351,21 @@ h1.page-title {
   background: #fff;
   color: var(--ink);
   border: 1px solid var(--border);
-  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .btn-secondary:hover {
   background: var(--bg);
   border-color: var(--ink-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .btn:hover,
+  .btn:active {
+    transform: none;
+  }
 }
 
 .btn-link {
@@ -245,6 +391,16 @@ h1.page-title {
   font-weight: 700;
   color: var(--ink);
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-value-secondary {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }
 
 .result-label {
@@ -308,6 +464,14 @@ h1.page-title {
   height: 100%;
   background: var(--accent);
   border-radius: 6px;
+  width: 0;
+  transition: width 0.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fi-bar-fill {
+    transition: none;
+  }
 }
 
 /* Numbered factor list */
@@ -355,6 +519,15 @@ h1.page-title {
   line-height: 1.5;
 }
 
+.footer-watermark {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  margin: 0 auto 10px;
+  opacity: 0.35;
+}
+
 /* Responsive */
 
 @media (max-width: 600px) {
@@ -376,5 +549,14 @@ h1.page-title {
 
   .result-value {
     font-size: 2rem;
+  }
+
+  .wordmark-icon {
+    height: 34px;
+    width: 34px;
+  }
+
+  .blob {
+    filter: blur(50px);
   }
 }
