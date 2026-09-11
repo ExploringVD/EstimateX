@@ -31,9 +31,19 @@ data/processed/*
 !data/processed/desharnais_train.csv
 !data/processed/desharnais_test.csv
 
-# Trained models
+# Trained models (block .pkl by default — they're regenerable via
+# src/train_models.py — but explicitly track the 8 models from Step 6
+# since the app in a later step will load them directly)
 models/*.pkl
 !models/.gitkeep
+!models/cocomo_nasa_linear_regression.pkl
+!models/cocomo_nasa_random_forest.pkl
+!models/cocomo_nasa_xgboost.pkl
+!models/cocomo_nasa_svr.pkl
+!models/desharnais_linear_regression.pkl
+!models/desharnais_random_forest.pkl
+!models/desharnais_xgboost.pkl
+!models/desharnais_svr.pkl
 
 # Environment / secrets
 .env
