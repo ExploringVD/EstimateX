@@ -95,6 +95,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
 from preprocessing import (  # noqa: E402
+    BACKFIRE_LOC_PER_FP,
     COCOMO_BINARY_COL,
     COCOMO_ID_COL,
     COCOMO_NUMERIC_COLS,
@@ -106,6 +107,7 @@ from preprocessing import (  # noqa: E402
     DESHARNAIS_NUMERIC_COLS,
     DESHARNAIS_ONEHOT_COLS,
     DESHARNAIS_TARGET_COL,
+    HOURS_PER_PERSON_MONTH,
     encode_label_binary,
     encode_onehot,
     encode_ordinal,
@@ -124,22 +126,15 @@ app = Flask(__name__)
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 RAW_DIR = os.path.join(PROJECT_ROOT, "data", "raw")
 
-# Boehm/COCOMO's standard person-hours-per-person-month figure, used only
-# to convert Desharnais's effort (person-hours) into the same
-# "person-months" unit COCOMO's predictions are already in, so both
-# domains display on a consistent scale.
-HOURS_PER_PERSON_MONTH = 152
+# HOURS_PER_PERSON_MONTH and BACKFIRE_LOC_PER_FP now live in
+# src/preprocessing.py (imported above) — they're also needed by the
+# software-domain unification pipeline, so they're defined once there
+# rather than redefined per call site.
 
 # Illustrative-only cost-per-person-month assumption, since neither
 # dataset has a currency column. Change this to a real loaded labor rate
 # if one is available.
 COST_PER_PERSON_MONTH = 10_000  # USD
-
-# Capers Jones' commonly-cited "backfire" rule of thumb: roughly 100 lines
-# of code per function point for typical 3rd-generation languages. Used
-# only to give the shared KLOC input a grounded (if approximate) effect on
-# Desharnais's function-point-based size features.
-BACKFIRE_LOC_PER_FP = 100
 
 TOP_N_FEATURES = 5
 

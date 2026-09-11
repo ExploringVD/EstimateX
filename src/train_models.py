@@ -32,9 +32,17 @@ CV_FOLDS = 5
 
 # Display name -> filename slug used for saved models, e.g.
 # models/cocomo_nasa_random_forest.pkl
+#
+# "Software-Unified" and "Construction" were added later (multi-domain
+# extension): COCOMO-NASA and Desharnais are no longer separately deployed
+# domains — they're unified into one software dataset/model — but their
+# entries and saved .pkl files are kept here and on disk unchanged, so the
+# original per-dataset comparison (Steps 6-9) stays reproducible.
 DATASET_SLUGS = {
     "COCOMO-NASA": "cocomo_nasa",
     "Desharnais": "desharnais",
+    "Software-Unified": "software",
+    "Construction": "construction",
 }
 
 # Single source of truth for which model slugs exist and in what order —

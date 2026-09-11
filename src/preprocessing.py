@@ -74,6 +74,24 @@ DESHARNAIS_NUMERIC_COLS = [
 DESHARNAIS_ID_COL = "Project"
 DESHARNAIS_TARGET_COL = "Effort"
 
+# Shared unit-conversion constants — used wherever software effort/size
+# figures need to cross between COCOMO-NASA's and Desharnais's different
+# units (the live app's Desharnais path, and the software-domain
+# unification pipeline). Defined once here rather than redefined per
+# call site.
+#
+# Boehm/COCOMO's standard person-hours-per-person-month figure, used to
+# convert Desharnais's effort (person-hours) into the person-months unit
+# COCOMO-NASA's effort is already in.
+HOURS_PER_PERSON_MONTH = 152
+
+# Capers Jones' commonly-cited "backfire" rule of thumb: roughly 100 lines
+# of code per function point for typical 3rd-generation languages. Used to
+# give Desharnais's function-point-based size measures an approximate
+# KLOC-equivalent, comparable to COCOMO-NASA's native `equivphyskloc`. A
+# named, documented approximation — not a measured conversion.
+BACKFIRE_LOC_PER_FP = 100
+
 
 # ---------------------------------------------------------------------------
 # Generic, reusable building blocks
