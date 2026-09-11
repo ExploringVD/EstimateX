@@ -25,6 +25,11 @@ data/processed/*
 # Exception: small cleaned datasets produced by src/preprocessing.py
 !data/processed/cocomo_nasa_clean.csv
 !data/processed/desharnais_clean.csv
+# Exception: train/test splits produced by src/split_data.py
+!data/processed/cocomo_nasa_train.csv
+!data/processed/cocomo_nasa_test.csv
+!data/processed/desharnais_train.csv
+!data/processed/desharnais_test.csv
 
 # Trained models
 models/*.pkl
