@@ -25,9 +25,13 @@
 
   <!-- ============ SOFTWARE FIELD GROUP (Software/Web, Mobile App, Enterprise/Other) ============ -->
   <!-- Routes to models/final_model_software.pkl (the unified COCOMO-NASA + Desharnais model).
-       Every field here genuinely feeds the model — Team Size and Required Reliability were
-       investigated and removed entirely (see results/software_unification_notes.md) rather
-       than kept as decorative unused inputs. -->
+       Team Experience / Project Size / Project Complexity genuinely feed the model — Team Size
+       and Required Reliability were investigated and removed entirely (see
+       results/software_unification_notes.md) rather than kept as decorative unused inputs.
+       Planned Start Month/Year are NOT model inputs — they're only used to turn the predicted
+       effort into an approximate "Estimated completion" date on the results page (app.py's
+       compute_estimated_completion); Construction has no effort/duration prediction to attach
+       a start date to, so these two fields are software-only, same as the rest of this group. -->
   <div class="form-section toggle-group" id="software-fields">
     <p class="section-label">Team &amp; Scope</p>
 
@@ -56,6 +60,24 @@
         {% endfor %}
       </select>
       {% if errors.complexity %}<span class="field-error">{{ errors.complexity }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="start_month">Planned Start Month</label>
+      <select id="start_month" name="start_month">
+        {% for value, label in month_options %}
+        <option value="{{ value }}" {% if form_values.get('start_month') == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.start_month %}<span class="field-error">{{ errors.start_month }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="start_year">Planned Start Year</label>
+      <input type="number" id="start_year" name="start_year" required min="{{ min_start_year }}" max="{{ max_start_year }}" step="1"
+             value="{{ form_values.get('start_year', current_year) }}">
+      <span class="field-hint">Used to turn the predicted effort into an approximate completion date.</span>
+      {% if errors.start_year %}<span class="field-error">{{ errors.start_year }}</span>{% endif %}
     </div>
   </div>
 
