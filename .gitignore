@@ -22,6 +22,9 @@ data/processed/*
 # Exception: small, canonical source datasets we want version-controlled as-is
 !data/raw/cocomo_nasa.csv
 !data/raw/desharnais.csv
+# Exception: small cleaned datasets produced by src/preprocessing.py
+!data/processed/cocomo_nasa_clean.csv
+!data/processed/desharnais_clean.csv
 
 # Trained models
 models/*.pkl
