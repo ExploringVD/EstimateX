@@ -1,13 +1,16 @@
 {% extends "base.html" %}
 {% block title %}EstimateX — New Estimate{% endblock %}
 {% block content %}
-<form method="POST" action="{{ url_for('predict') }}" class="card" novalidate>
+<h1 class="page-title">Get an explainable estimate</h1>
+<p class="page-subtitle">Predict your project's time and cost — with a reason attached.</p>
+
+<form method="POST" action="{{ url_for('predict') }}" class="card" novalidate id="estimate-form">
   {% if errors %}
   <div class="error-banner">Please fix the highlighted field{{ 's' if errors|length > 1 else '' }} below.</div>
   {% endif %}
 
   <div class="form-section">
-    <h2>Project details</h2>
+    <p class="section-label">Project details</p>
 
     <div class="field-group">
       <label for="domain">Project Domain</label>
@@ -17,6 +20,37 @@
         {% endfor %}
       </select>
       {% if errors.domain %}<span class="field-error">{{ errors.domain }}</span>{% endif %}
+    </div>
+  </div>
+
+  <!-- ============ SOFTWARE FIELD GROUP (Software/Web, Mobile App, Enterprise/Other) ============ -->
+  <!-- Routes to models/final_model_software.pkl (the unified COCOMO-NASA + Desharnais model). -->
+  <div class="form-section" id="software-fields">
+    <p class="section-label">Team &amp; Scope</p>
+
+    <div class="field-group">
+      <label for="team_size">Team Size</label>
+      <input type="number" id="team_size" name="team_size" required min="1" max="{{ max_team_size }}" step="1"
+             value="{{ form_values.get('team_size', '') }}">
+      <span class="field-hint">Informational for now — not yet used by the trained model (see app.py).</span>
+      {% if errors.team_size %}<span class="field-error">{{ errors.team_size }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="team_experience">Team Experience</label>
+      <select id="team_experience" name="team_experience">
+        {% for value, label in experience_options %}
+        <option value="{{ value }}" {% if form_values.get('team_experience') == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.team_experience %}<span class="field-error">{{ errors.team_experience }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="project_size_kloc">Estimated Project Size (KLOC)</label>
+      <input type="number" id="project_size_kloc" name="project_size_kloc" required min="0.1" max="{{ max_project_size_kloc }}" step="0.1"
+             value="{{ form_values.get('project_size_kloc', '') }}">
+      {% if errors.project_size_kloc %}<span class="field-error">{{ errors.project_size_kloc }}</span>{% endif %}
     </div>
 
     <div class="field-group">
@@ -36,39 +70,95 @@
         <option value="{{ value }}" {% if form_values.get('reliability') == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
+      <span class="field-hint">Not yet used by the unified software model — kept for future extensibility.</span>
       {% if errors.reliability %}<span class="field-error">{{ errors.reliability }}</span>{% endif %}
     </div>
   </div>
 
-  <div class="form-section">
-    <h2>Team &amp; Scope</h2>
+  <!-- ============ CONSTRUCTION FIELD GROUP ============ -->
+  <!-- Real columns from results/construction_domain_notes.md (UCI Residential Building
+       dataset), not generic placeholders. Routes to models/final_model_construction.pkl. -->
+  <div class="form-section" id="construction-fields" hidden>
+    <p class="section-label">Project Location &amp; Size</p>
 
     <div class="field-group">
-      <label for="team_size">Team Size</label>
-      <input type="number" id="team_size" name="team_size" min="1" max="{{ max_team_size }}" step="1"
-             value="{{ form_values.get('team_size', '') }}">
-      <span class="field-hint">Informational for now — not yet used by either trained model (see app.py).</span>
-      {% if errors.team_size %}<span class="field-error">{{ errors.team_size }}</span>{% endif %}
-    </div>
-
-    <div class="field-group">
-      <label for="team_experience">Team Experience</label>
-      <select id="team_experience" name="team_experience">
-        {% for value, label in experience_options %}
-        <option value="{{ value }}" {% if form_values.get('team_experience') == value %}selected{% endif %}>{{ label }}</option>
+      <label for="locality">Locality (zone code)</label>
+      <select id="locality" name="locality">
+        {% for value in locality_options %}
+        <option value="{{ value }}" {% if form_values.get('locality') == value|string %}selected{% endif %}>Zone {{ value }}</option>
         {% endfor %}
       </select>
-      {% if errors.team_experience %}<span class="field-error">{{ errors.team_experience }}</span>{% endif %}
+      <span class="field-hint">The dataset's own locality/zip-style zone code (1–20), not a real address.</span>
+      {% if errors.locality %}<span class="field-error">{{ errors.locality }}</span>{% endif %}
     </div>
 
     <div class="field-group">
-      <label for="project_size_kloc">Estimated Project Size (KLOC)</label>
-      <input type="number" id="project_size_kloc" name="project_size_kloc" min="0.1" max="{{ max_project_size_kloc }}" step="0.1"
-             value="{{ form_values.get('project_size_kloc', '') }}">
-      {% if errors.project_size_kloc %}<span class="field-error">{{ errors.project_size_kloc }}</span>{% endif %}
+      <label for="floor_area_m2">Total Floor Area (m²)</label>
+      <input type="number" id="floor_area_m2" name="floor_area_m2" required min="1" step="1"
+             value="{{ form_values.get('floor_area_m2', '') }}">
+      {% if errors.floor_area_m2 %}<span class="field-error">{{ errors.floor_area_m2 }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="lot_area_m2">Lot Area (m²)</label>
+      <input type="number" id="lot_area_m2" name="lot_area_m2" required min="1" step="1"
+             value="{{ form_values.get('lot_area_m2', '') }}">
+      {% if errors.lot_area_m2 %}<span class="field-error">{{ errors.lot_area_m2 }}</span>{% endif %}
     </div>
   </div>
 
-  <button type="submit" class="btn-primary">Get estimate</button>
+  <div class="form-section" id="construction-fields-2" hidden>
+    <p class="section-label">Cost Estimates &amp; Duration</p>
+
+    <div class="field-group">
+      <label for="prelim_est_cost">Preliminary Estimated Cost (×10,000 IRR)</label>
+      <input type="number" id="prelim_est_cost" name="prelim_est_cost" required min="0.01" step="0.01"
+             value="{{ form_values.get('prelim_est_cost', '') }}">
+      <span class="field-hint">The strongest single predictor of final cost in the trained model.</span>
+      {% if errors.prelim_est_cost %}<span class="field-error">{{ errors.prelim_est_cost }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="prelim_est_cost_total">Preliminary Estimated Cost, Total (×10,000,000 IRR)</label>
+      <input type="number" id="prelim_est_cost_total" name="prelim_est_cost_total" required min="0.01" step="0.01"
+             value="{{ form_values.get('prelim_est_cost_total', '') }}">
+      {% if errors.prelim_est_cost_total %}<span class="field-error">{{ errors.prelim_est_cost_total }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="prelim_est_cost_equiv">Preliminary Estimated Cost, Base-Year Equivalent (×10,000 IRR)</label>
+      <input type="number" id="prelim_est_cost_equiv" name="prelim_est_cost_equiv" required min="0.01" step="0.01"
+             value="{{ form_values.get('prelim_est_cost_equiv', '') }}">
+      {% if errors.prelim_est_cost_equiv %}<span class="field-error">{{ errors.prelim_est_cost_equiv }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="planned_duration">Planned Construction Duration</label>
+      <input type="number" id="planned_duration" name="planned_duration" required min="1" step="1"
+             value="{{ form_values.get('planned_duration', '') }}">
+      <span class="field-hint">Used as an input to predict cost — this domain does not predict duration itself (see results page).</span>
+      {% if errors.planned_duration %}<span class="field-error">{{ errors.planned_duration }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="unit_price_start">Starting Unit Price (×10,000 IRR per m²)</label>
+      <input type="number" id="unit_price_start" name="unit_price_start" required min="0.01" step="0.01"
+             value="{{ form_values.get('unit_price_start', '') }}">
+      {% if errors.unit_price_start %}<span class="field-error">{{ errors.unit_price_start }}</span>{% endif %}
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">
+    Get estimate
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
 </form>
+
+<p class="footer-caption">
+  Trained on COCOMO-NASA &amp; Desharnais historical project data (software) and the UCI Residential Building dataset (construction). Every prediction ships with the factors that drove it.
+</p>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 {% endblock %}

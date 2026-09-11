@@ -1,20 +1,34 @@
 {% extends "base.html" %}
 {% block title %}EstimateX — Your Estimate{% endblock %}
 {% block content %}
+<h1 class="page-title">Your estimate</h1>
+<p class="page-subtitle">{{ domain_label }}</p>
+
 <div class="card">
   <div class="result-grid">
+    {% if not is_construction %}
     <div class="result-stat">
       <div class="result-value">{{ predicted_effort_months }}</div>
       <div class="result-label">Predicted Effort (months)</div>
     </div>
+    {% endif %}
     <div class="result-stat">
-      <div class="result-value">${{ "{:,.0f}".format(predicted_cost) }}</div>
+      <div class="result-value">{{ predicted_cost_display }}</div>
       <div class="result-label">Predicted Cost</div>
     </div>
   </div>
+  {% if not is_construction %}
   <p class="result-caption">
-    Domain: {{ domain_label }} · Cost assumes ${{ "{:,.0f}".format(cost_per_person_month) }}/person-month (illustrative — adjust in app.py)
+    Cost assumes ${{ "{:,.0f}".format(cost_per_person_month) }}/person-month (illustrative — adjust in app.py)
   </p>
+  {% else %}
+  <p class="result-caption">
+    Cost shown in the dataset's native units (×10,000 Iranian Rial) — not US dollars.
+  </p>
+  <p class="result-note">
+    Time-to-completion prediction isn't available for Construction yet — the training data doesn't include project duration.
+  </p>
+  {% endif %}
 </div>
 
 <div class="card">
@@ -22,15 +36,28 @@
   <div class="fi-list">
     {% for row in feature_rows %}
     <div class="fi-row">
-      <span class="fi-label">{{ row.label }}</span>
+      <div class="fi-row-header">
+        <span class="fi-label">{{ row.label }}</span>
+        <span class="fi-pct">{{ row.pct }}%</span>
+      </div>
       <div class="fi-bar-track">
         <div class="fi-bar-fill" style="width: {{ row.pct }}%; opacity: {{ row.opacity }};"></div>
       </div>
-      <span class="fi-pct">{{ row.pct }}%</span>
     </div>
     {% endfor %}
   </div>
-  <p class="fi-summary">{{ summary_sentence }}</p>
-  <a href="{{ url_for('index') }}" class="btn-primary btn-link">Try another estimate</a>
+
+  <ol class="factor-list">
+    {% for sentence in factor_sentences %}
+    <li>{{ sentence }}</li>
+    {% endfor %}
+  </ol>
+
+  <a href="{{ url_for('index') }}" class="btn btn-secondary btn-link">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M13 8H3M3 8L7 4M3 8L7 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Try another estimate
+  </a>
 </div>
 {% endblock %}
