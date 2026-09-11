@@ -143,6 +143,16 @@ BACKFIRE_LOC_PER_FP = 100
 
 TOP_N_FEATURES = 5
 
+# Sanity-check upper bounds for free-text number inputs — generous enough
+# to comfortably cover any real project (and the "unusually large" stress
+# tests in Step 11's own test plan, up to a few thousand KLOC), but tight
+# enough to catch obviously-mistyped input like team_size=999999 with a
+# clear error instead of silently accepting it. Found missing during
+# Step 11 end-to-end testing; team_size=999999 was sailing through with
+# no feedback before this was added.
+MAX_TEAM_SIZE = 2_000
+MAX_PROJECT_SIZE_KLOC = 100_000
+
 DOMAIN_OPTIONS = [
     ("cocomo", "Aerospace / Embedded Systems (NASA-style)"),
     ("desharnais", "Business / Information Systems"),
@@ -404,8 +414,11 @@ def validate_form(form) -> dict:
         errors["team_size"] = "Team size is required."
     else:
         try:
-            if int(team_size_raw) <= 0:
+            team_size_value = int(team_size_raw)
+            if team_size_value <= 0:
                 errors["team_size"] = "Team size must be a positive whole number."
+            elif team_size_value > MAX_TEAM_SIZE:
+                errors["team_size"] = f"Team size must be {MAX_TEAM_SIZE:,} or fewer."
         except ValueError:
             errors["team_size"] = "Team size must be a whole number."
 
@@ -414,8 +427,11 @@ def validate_form(form) -> dict:
         errors["project_size_kloc"] = "Project size is required."
     else:
         try:
-            if float(kloc_raw) <= 0:
+            kloc_value = float(kloc_raw)
+            if kloc_value <= 0:
                 errors["project_size_kloc"] = "Project size must be a positive number."
+            elif kloc_value > MAX_PROJECT_SIZE_KLOC:
+                errors["project_size_kloc"] = f"Project size must be {MAX_PROJECT_SIZE_KLOC:,} KLOC or fewer."
         except ValueError:
             errors["project_size_kloc"] = "Project size must be a number."
 
@@ -426,33 +442,29 @@ def validate_form(form) -> dict:
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.route("/", methods=["GET"])
-def index():
+def render_form(form_values, errors):
     return render_template(
         "form.html",
-        form_values=DEFAULT_FORM_VALUES,
-        errors={},
+        form_values=form_values,
+        errors=errors,
         domain_options=DOMAIN_OPTIONS,
         ordinal_options=ORDINAL_OPTIONS,
         experience_options=EXPERIENCE_OPTIONS,
+        max_team_size=MAX_TEAM_SIZE,
+        max_project_size_kloc=MAX_PROJECT_SIZE_KLOC,
     )
+
+
+@app.route("/", methods=["GET"])
+def index():
+    return render_form(DEFAULT_FORM_VALUES, {})
 
 
 @app.route("/predict", methods=["POST"])
 def predict():
     errors = validate_form(request.form)
     if errors:
-        return (
-            render_template(
-                "form.html",
-                form_values=request.form,
-                errors=errors,
-                domain_options=DOMAIN_OPTIONS,
-                ordinal_options=ORDINAL_OPTIONS,
-                experience_options=EXPERIENCE_OPTIONS,
-            ),
-            400,
-        )
+        return render_form(request.form, errors), 400
 
     domain = request.form["domain"]
     kloc = float(request.form["project_size_kloc"])
