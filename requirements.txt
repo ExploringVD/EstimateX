@@ -7,3 +7,5 @@ seaborn
 flask
 streamlit
 joblib
+jupyter
+ipykernel
