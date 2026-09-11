@@ -7,15 +7,16 @@
   --ink: #f4f2ec;
   --ink-soft: #a7a9b4;
   --ink-faint: #6c6f7c;
-  --gold: #e3a23e;
-  --rust: #c9662f;
+  --wine: #8c2f45;
+  --wine-2: #b8455f;
+  --wine-dark: #5a1f30;
   --track: rgba(255, 255, 255, 0.08);
 
   --font-heading: "Space Grotesk", sans-serif;
   --font-body: "IBM Plex Sans", sans-serif;
 
-  --gradient-accent: linear-gradient(135deg, var(--gold), var(--rust));
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.35), 0 0 60px -8px rgba(227, 162, 62, 0.18);
+  --gradient-accent: linear-gradient(135deg, var(--wine), var(--wine-2));
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.35), 0 0 60px -8px rgba(140, 47, 69, 0.18);
 }
 
 * {
@@ -78,7 +79,7 @@ body {
   height: 750px;
   top: -220px;
   left: -180px;
-  background: radial-gradient(circle, var(--gold) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--wine) 0%, transparent 70%);
   opacity: 0.45;
   filter: blur(100px);
   animation: driftOrb1 14s ease-in-out infinite;
@@ -89,7 +90,7 @@ body {
   height: 850px;
   top: 26%;
   right: -260px;
-  background: radial-gradient(circle, var(--rust) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--wine-2) 0%, transparent 70%);
   opacity: 0.4;
   filter: blur(100px);
   animation: driftOrb2 17s ease-in-out infinite;
@@ -101,7 +102,7 @@ body {
   height: 680px;
   bottom: -220px;
   left: 12%;
-  background: radial-gradient(circle, var(--gold) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--wine) 0%, transparent 70%);
   opacity: 0.38;
   filter: blur(100px);
   animation: driftOrb3 15s ease-in-out infinite;
@@ -204,9 +205,6 @@ body {
   flex-shrink: 0;
   height: 64px;
   width: 64px;
-  border-radius: 16px;
-  overflow: hidden;
-  object-fit: cover;
   display: block;
 }
 
@@ -219,7 +217,7 @@ body {
 }
 
 .wordmark-text .accent-letter {
-  color: var(--gold);
+  color: var(--wine);
 }
 
 .wordmark-tagline {
@@ -229,7 +227,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--rust);
+  color: var(--wine-2);
 }
 
 .tagline {
@@ -355,8 +353,8 @@ h1.page-title {
 .field-group select:focus,
 .field-group input[type="number"]:focus {
   outline: none;
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(227, 162, 62, 0.18);
+  border-color: var(--wine);
+  box-shadow: 0 0 0 3px rgba(140, 47, 69, 0.18);
 }
 
 .field-hint {
@@ -418,7 +416,7 @@ h1.page-title {
 
 .btn-primary:hover {
   filter: brightness(1.08);
-  box-shadow: 0 6px 24px rgba(227, 162, 62, 0.3);
+  box-shadow: 0 6px 24px rgba(140, 47, 69, 0.3);
 }
 
 .btn-secondary {
@@ -575,7 +573,7 @@ h1.page-title {
   content: counter(factor) ".";
   position: absolute;
   left: 0;
-  color: var(--gold);
+  color: var(--wine);
   font-weight: 600;
   font-family: var(--font-heading);
 }
@@ -593,17 +591,6 @@ h1.page-title {
   color: var(--ink-faint);
   text-align: center;
   line-height: 1.5;
-}
-
-.footer-watermark {
-  display: block;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  overflow: hidden;
-  object-fit: cover;
-  margin: 0 auto 10px;
-  opacity: 0.45;
 }
 
 /* Responsive */
@@ -632,7 +619,6 @@ h1.page-title {
   .wordmark-icon {
     height: 52px;
     width: 52px;
-    border-radius: 13px;
   }
 
   .wordmark-text {
