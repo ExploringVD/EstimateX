@@ -30,6 +30,15 @@ data/processed/*
 !data/processed/cocomo_nasa_test.csv
 !data/processed/desharnais_train.csv
 !data/processed/desharnais_test.csv
+# Exception: multi-domain extension — real construction dataset, and the
+# harmonized software dataset + its own train/test split
+!data/raw/construction_residential.csv
+!data/processed/software_unified.csv
+!data/processed/software_unified_train.csv
+!data/processed/software_unified_test.csv
+!data/processed/construction_clean.csv
+!data/processed/construction_train.csv
+!data/processed/construction_test.csv
 
 # Trained models (block .pkl by default — they're regenerable via
 # src/train_models.py — but explicitly track the 8 models from Step 6
@@ -51,6 +60,22 @@ models/*.pkl
 !models/final_encoder_cocomo.pkl
 !models/final_scaler_desharnais.pkl
 !models/final_encoder_desharnais.pkl
+# Exception: multi-domain extension — per-algorithm models for the two
+# new domains, and their final deployment artifacts
+!models/software_linear_regression.pkl
+!models/software_random_forest.pkl
+!models/software_xgboost.pkl
+!models/software_svr.pkl
+!models/construction_linear_regression.pkl
+!models/construction_random_forest.pkl
+!models/construction_xgboost.pkl
+!models/construction_svr.pkl
+!models/final_model_software.pkl
+!models/final_model_construction.pkl
+!models/final_scaler_software.pkl
+!models/final_encoder_software.pkl
+!models/final_scaler_construction.pkl
+!models/final_encoder_construction.pkl
 
 # Environment / secrets
 .env

@@ -43,7 +43,19 @@ CHART_TOP_N = 15
 # Filename tags matching the exact paths requested in the roadmap:
 # results/feature_importance_cocomo_rf.png, ..._cocomo_xgb.png,
 # ..._desharnais_rf.png, ..._desharnais_xgb.png
-DATASET_FILE_TAGS = {"COCOMO-NASA": "cocomo", "Desharnais": "desharnais"}
+#
+# "Software-Unified"/"Construction" tags are also used by
+# select_final_model.resave_model() for the multi-domain extension's
+# final_model_{tag}.pkl filenames, even though those two domains'
+# feature-importance charts are generated directly by
+# src/train_new_domains.py (one winner-model chart each, not the
+# per-algorithm rf/xgb pair analyze_model() below produces).
+DATASET_FILE_TAGS = {
+    "COCOMO-NASA": "cocomo",
+    "Desharnais": "desharnais",
+    "Software-Unified": "software",
+    "Construction": "construction",
+}
 MODEL_FILE_TAGS = {"random_forest": "rf", "xgboost": "xgb"}
 
 
