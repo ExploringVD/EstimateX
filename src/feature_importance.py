@@ -40,6 +40,12 @@ MODEL_LABELS = {"random_forest": "Random Forest", "xgboost": "XGBoost"}
 # covers every feature, full ranking, no truncation.
 CHART_TOP_N = 15
 
+# Filename tags matching the exact paths requested in the roadmap:
+# results/feature_importance_cocomo_rf.png, ..._cocomo_xgb.png,
+# ..._desharnais_rf.png, ..._desharnais_xgb.png
+DATASET_FILE_TAGS = {"COCOMO-NASA": "cocomo", "Desharnais": "desharnais"}
+MODEL_FILE_TAGS = {"random_forest": "rf", "xgboost": "xgb"}
+
 
 def get_feature_names(train_path: str, target_col: str) -> list[str]:
     """Feature names in the exact order the model was trained on —
@@ -99,24 +105,16 @@ def analyze_model(dataset_name: str, model_name: str, feature_names: list[str]) 
     return ranking
 
 
-# Filename tags matching the exact paths requested in the roadmap:
-# results/feature_importance_cocomo_rf.png, ..._cocomo_xgb.png,
-# ..._desharnais_rf.png, ..._desharnais_xgb.png
-DATASET_FILE_TAGS = {"COCOMO-NASA": "cocomo", "Desharnais": "desharnais"}
-MODEL_FILE_TAGS = {"random_forest": "rf", "xgboost": "xgb"}
-
-
 if __name__ == "__main__":
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     print("EstimateX — Step 8 feature importance")
     print()
 
-    rankings: dict[tuple[str, str], pd.DataFrame] = {}
     for cfg in DATASET_CONFIGS:
         feature_names = get_feature_names(cfg["train_path"], cfg["target_col"])
         for model_name in TREE_MODEL_NAMES:
-            rankings[(cfg["name"], model_name)] = analyze_model(cfg["name"], model_name, feature_names)
+            analyze_model(cfg["name"], model_name, feature_names)
 
     print("=" * 78)
     print("Scoping note")

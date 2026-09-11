@@ -24,7 +24,7 @@ from sklearn.model_selection import KFold, cross_val_score
 from sklearn.svm import SVR
 from xgboost import XGBRegressor
 
-from split_data import DATASET_CONFIGS, RANDOM_STATE
+from split_data import DATASET_CONFIGS, RANDOM_STATE, split_features_target
 from preprocessing import save_artifact
 
 MODELS_DIR = "models"
@@ -72,10 +72,8 @@ def load_train_test(train_path: str, test_path: str, target_col: str):
     train_df = pd.read_csv(train_path)
     test_df = pd.read_csv(test_path)
 
-    X_train = train_df.drop(columns=[target_col])
-    y_train = train_df[target_col]
-    X_test = test_df.drop(columns=[target_col])
-    y_test = test_df[target_col]
+    X_train, y_train = split_features_target(train_df, target_col)
+    X_test, y_test = split_features_target(test_df, target_col)
 
     return X_train, X_test, y_train, y_test
 
