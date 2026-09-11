@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}EstimateX{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <div class="wordmark">
+        <svg class="wordmark-icon" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+          <rect x="2" y="13" width="4" height="9" rx="1" fill="#2C5FCB"/>
+          <rect x="10" y="8" width="4" height="14" rx="1" fill="#2C5FCB" opacity="0.8"/>
+          <rect x="18" y="2" width="4" height="20" rx="1" fill="#2C5FCB" opacity="0.6"/>
+        </svg>
+        <span class="wordmark-text">EstimateX</span>
+      </div>
+      <p class="tagline">Predict your project's time and cost — with a reason attached.</p>
+    </header>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>
