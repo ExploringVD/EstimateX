@@ -1,5 +1,6 @@
 :root {
-  --bg: #0d0f16;
+  --bg: #0a0e1a;
+  --bg-wash: #141b2e;
   --bg-2: #14171f;
   --glass: rgba(255, 255, 255, 0.045);
   --glass-border: rgba(255, 255, 255, 0.09);
@@ -23,12 +24,26 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: radial-gradient(ellipse 1400px 1400px at 12% 8%, var(--bg-wash) 0%, transparent 60%), var(--bg);
+  background-attachment: fixed;
+  background-size: 200% 200%, 100% 100%;
+  animation: washDrift 50s ease-in-out infinite alternate;
   color: var(--ink);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   position: relative;
   overflow-x: hidden;
+}
+
+@keyframes washDrift {
+  from { background-position: 0% 0%, 0 0; }
+  to   { background-position: 30% 20%, 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
 }
 
 .page {
@@ -59,53 +74,87 @@ body {
 }
 
 .orb-1 {
-  width: 620px;
-  height: 620px;
-  top: -160px;
-  left: -140px;
+  width: 750px;
+  height: 750px;
+  top: -220px;
+  left: -180px;
   background: radial-gradient(circle, var(--gold) 0%, transparent 70%);
-  opacity: 0.16;
+  opacity: 0.45;
   filter: blur(100px);
-  animation: driftOrb1 22s ease-in-out infinite alternate;
+  animation: driftOrb1 14s ease-in-out infinite;
 }
 
 .orb-2 {
-  width: 560px;
-  height: 560px;
-  top: 32%;
-  right: -180px;
+  width: 850px;
+  height: 850px;
+  top: 26%;
+  right: -260px;
   background: radial-gradient(circle, var(--rust) 0%, transparent 70%);
-  opacity: 0.14;
-  filter: blur(110px);
-  animation: driftOrb2 25s ease-in-out infinite alternate;
-  animation-delay: -6s;
+  opacity: 0.4;
+  filter: blur(100px);
+  animation: driftOrb2 17s ease-in-out infinite;
+  animation-delay: -4s;
 }
 
 .orb-3 {
-  width: 500px;
-  height: 500px;
-  bottom: -180px;
-  left: 18%;
+  width: 680px;
+  height: 680px;
+  bottom: -220px;
+  left: 12%;
   background: radial-gradient(circle, var(--gold) 0%, transparent 70%);
-  opacity: 0.15;
-  filter: blur(90px);
-  animation: driftOrb3 20s ease-in-out infinite alternate;
-  animation-delay: -12s;
+  opacity: 0.38;
+  filter: blur(100px);
+  animation: driftOrb3 15s ease-in-out infinite;
+  animation-delay: -8s;
 }
 
+/* Movement is deliberately large (15-25% of viewport) and the scale
+   swing wide (0.8x-1.3x) so the motion is unmistakable within the first
+   couple of seconds, not a barely-there drift. */
+
 @keyframes driftOrb1 {
-  from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(70px, 50px) scale(1.12); }
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(22vw, 18vh) scale(1.3); }
+  100% { transform: translate(0, 0) scale(1); }
 }
 
 @keyframes driftOrb2 {
-  from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(-60px, 70px) scale(1.08); }
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(-20vw, 22vh) scale(0.8); }
+  100% { transform: translate(0, 0) scale(1); }
 }
 
 @keyframes driftOrb3 {
-  from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(50px, -60px) scale(1.1); }
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(18vw, -25vh) scale(1.22); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+/* Subtle panning grid overlay — a second, quieter layer of motion so the
+   background never reads as flat even between orb pulses. */
+
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.055;
+  background-image:
+    linear-gradient(var(--ink) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ink) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: panGrid 34s linear infinite;
+}
+
+@keyframes panGrid {
+  from { background-position: 0 0; }
+  to   { background-position: 480px 480px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-grid {
+    animation: none;
+  }
 }
 
 /* Entrance animations — fade + slide up, staggered by delay class */
@@ -153,9 +202,9 @@ body {
 
 .wordmark-icon {
   flex-shrink: 0;
-  height: 44px;
-  width: 44px;
-  border-radius: 12px;
+  height: 64px;
+  width: 64px;
+  border-radius: 16px;
   overflow: hidden;
   object-fit: cover;
   display: block;
@@ -164,13 +213,23 @@ body {
 .wordmark-text {
   font-family: var(--font-heading);
   font-weight: 600;
-  font-size: 1.8rem;
+  font-size: 2.2rem;
   letter-spacing: -0.02em;
   color: var(--ink);
 }
 
 .wordmark-text .accent-letter {
   color: var(--gold);
+}
+
+.wordmark-tagline {
+  margin: 10px 0 0;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--rust);
 }
 
 .tagline {
@@ -571,11 +630,16 @@ h1.page-title {
   }
 
   .wordmark-icon {
-    height: 36px;
-    width: 36px;
+    height: 52px;
+    width: 52px;
+    border-radius: 13px;
+  }
+
+  .wordmark-text {
+    font-size: 1.7rem;
   }
 
   .orb {
-    filter: blur(60px);
+    filter: blur(70px);
   }
 }

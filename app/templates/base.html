@@ -16,12 +16,14 @@
     <div class="orb orb-2"></div>
     <div class="orb orb-3"></div>
   </div>
+  <div class="bg-grid" aria-hidden="true"></div>
   <div class="page">
     <header class="site-header anim-in anim-delay-0">
       <div class="wordmark">
         <img src="{{ url_for('static', filename='logo-icon.png') }}" alt="EstimateX" class="wordmark-icon">
         <span class="wordmark-text">Estimate<span class="accent-letter">X</span></span>
       </div>
+      <p class="wordmark-tagline">Time &times; Cost — Estimated</p>
     </header>
     <main class="content">
       {% block content %}{% endblock %}
