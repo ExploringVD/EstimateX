@@ -44,6 +44,13 @@ models/*.pkl
 !models/desharnais_random_forest.pkl
 !models/desharnais_xgboost.pkl
 !models/desharnais_svr.pkl
+# Exception: final deployment artifacts chosen in Step 9
+!models/final_model_cocomo.pkl
+!models/final_model_desharnais.pkl
+!models/final_scaler_cocomo.pkl
+!models/final_encoder_cocomo.pkl
+!models/final_scaler_desharnais.pkl
+!models/final_encoder_desharnais.pkl
 
 # Environment / secrets
 .env
