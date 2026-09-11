@@ -28,6 +28,15 @@ EstimateX/
 └── README.md
 ```
 
+## Datasets
+
+Both datasets are sourced from the [PROMISE Software Engineering Repository](http://promise.site.uottawa.ca/SERepository) (also mirrored via OpenML/Zenodo/SEACRAFT). The repository distributes them in ARFF format; they were losslessly converted to plain CSV (attribute names and data values unchanged, only the ARFF metadata/header wrapper stripped) and stored unmodified thereafter in `data/raw/`.
+
+| Dataset | Source URL | Records | Description |
+|---|---|---|---|
+| **COCOMO-NASA** (`cocomo_nasa.csv`) | http://promise.site.uottawa.ca/SERepository/datasets/cocomonasa_2.arff | 93 | 93 NASA software projects (1971–1987) with size, effort-driver ratings (e.g. complexity, reliability, team capability), and actual development effort in person-months. |
+| **Desharnais** (`desharnais.csv`) | http://promise.site.uottawa.ca/SERepository/datasets/desharnais.arff | 81 | 81 software projects from a Canadian software house, with team/manager experience and function-point-based size measures against actual development effort in person-hours. |
+
 ## Team
 
 - Vaishnavi Dutt
