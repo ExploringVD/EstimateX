@@ -230,12 +230,6 @@ body {
   color: var(--wine-2);
 }
 
-.tagline {
-  margin: 8px 0 0;
-  color: var(--ink-soft);
-  font-size: 1rem;
-}
-
 h1.page-title {
   font-family: var(--font-heading);
   font-weight: 700;
@@ -330,6 +324,54 @@ h1.page-title {
   font-weight: 500;
   color: var(--ink-soft);
   margin-bottom: 6px;
+}
+
+/* Project Size (KLOC) quick-fill presets — a convenience layer above the
+   real, always-editable number input right below them (see kloc-presets.js).
+   Deliberately styled as plain toggle-able chips, not a select/radio group,
+   so it reads as "quick-fill a suggestion" rather than "choose one of these
+   three options" — the underlying field is the source of truth either way. */
+.kloc-presets {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.kloc-preset-btn {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.kloc-preset-btn:hover {
+  border-color: var(--wine-2);
+  color: var(--ink);
+}
+
+.kloc-preset-value {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+/* Active state — set the moment a preset is clicked, cleared the moment
+   the user types a value that no longer matches it (see kloc-presets.js).
+   Never a locked/disabled look, just a highlight of the last-used shortcut. */
+.kloc-preset-btn.kloc-preset-active {
+  border-color: var(--wine);
+  background: rgba(140, 47, 69, 0.16);
+  color: var(--ink);
+}
+
+.kloc-preset-btn.kloc-preset-active .kloc-preset-value {
+  color: var(--wine-2);
 }
 
 .field-group select,
@@ -518,6 +560,15 @@ h1.page-title {
   color: var(--ink-soft);
 }
 
+.result-note-caution {
+  border-left: 3px solid var(--wine-2);
+  background: color-mix(in oklab, var(--wine-2) 10%, var(--track));
+}
+
+.result-note-caution strong {
+  color: var(--wine-2);
+}
+
 /* Feature importance bar chart */
 
 .fi-list {
@@ -593,11 +644,6 @@ h1.page-title {
   color: var(--wine);
   font-weight: 600;
   font-family: var(--font-heading);
-}
-
-.factor-list .factor-pct {
-  color: var(--ink-faint);
-  font-weight: 500;
 }
 
 /* Footer */

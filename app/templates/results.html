@@ -28,7 +28,7 @@
   </div>
   {% if not is_construction %}
   <p class="result-caption">
-    Cost assumes ${{ "{:,.0f}".format(cost_per_person_month) }}/person-month (illustrative — adjust in app.py), converted at ₹{{ inr_per_usd }}/$1 (static demo rate)
+    Cost assumes ${{ "{:,.0f}".format(cost_rate) }}/person-month ({{ cost_region_label }} reference rate, 2026) — pick a different region on the form for a different market's typical rate, converted at ₹{{ inr_per_usd }}/$1 (static demo rate)
   </p>
   {% else %}
   <p class="result-caption">
@@ -36,6 +36,11 @@
   </p>
   <p class="result-note">
     Time-to-completion prediction isn't available for Construction yet — the training data doesn't include project duration.
+  </p>
+  {% endif %}
+  {% if confidence_note %}
+  <p class="result-note result-note-caution">
+    <strong>Limited training data for this input.</strong> {{ confidence_note }}
   </p>
   {% endif %}
 </div>

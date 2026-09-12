@@ -37,6 +37,9 @@ data/processed/*
 !data/processed/software_unified_train.csv
 !data/processed/software_unified_test.csv
 !data/processed/construction_clean.csv
+# Exception: third software dataset (China, PROMISE repository) added for
+# small-project coverage
+!data/raw/china.arff
 !data/processed/construction_train.csv
 !data/processed/construction_test.csv
 
