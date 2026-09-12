@@ -78,3 +78,85 @@ Random Forest's MAE (267.63) is 4.17% higher than Linear Regression's (256.91) �
 **Honest comparison to the original per-dataset models**: this combined-domain PRED(25) of 29.4% sits between COCOMO-NASA's standalone 42.1% and Desharnais's standalone 25.0% (`results/model_comparison.csv`) — unification traded away some of COCOMO-NASA's stronger individual accuracy for a single, simpler, genuinely-one-model software domain with more total training data. That tradeoff is worth stating plainly in the paper rather than only presenting the upside.
 
 Saved as `models/final_model_software.pkl`, `models/final_scaler_software.pkl`, `models/final_encoder_software.pkl` — per the roadmap, `models/final_model_cocomo.pkl` and `models/final_model_desharnais.pkl` are kept on disk (nothing deleted), simply no longer what a unified software domain would route to.
+
+## Making the residual limitation visible to the end user (2026-09-11)
+
+The "Honest residual limitation" above was previously only documented here — the deployed app itself presented every prediction with the same flat confidence, so a genuinely out-of-range query (e.g. 1 KLOC, Nominal) looked identical, from the UI's perspective, to a query the model actually has real support for. That's what was misread as "the model is broken."
+
+`app/app.py` now computes `SOFTWARE_COMPLEXITY_COVERAGE` at startup — for each complexity level, the real count of training rows and (when count > 0) the smallest real KLOC/effort example on record, straight from `unify_software.build_unified_dataframe()` (raw, pre-scaling units, so it's an apples-to-apples comparison with the form's own KLOC input). `predict_software()` compares each request's KLOC against that level's real minimum and — only when the request falls outside real training coverage — attaches a plain-language `confidence_note`, rendered on the results page as a distinct caution block (`app/templates/results.html`, `.result-note-caution` in `app/static/style.css`) naming the actual closest real example. Requests within the training data's real range are unaffected — no note, same prediction as before.
+
+This doesn't change any model, scaler, or prediction number — it makes an already-true, already-documented limitation visible where the person reading the estimate can actually see it, instead of leaving it buried in this file.
+
+## Adding China (PROMISE) for small-project coverage
+
+The "Honest residual limitation" section above concluded that COCOMO-NASA/Desharnais have **zero** real Nominal-complexity project under 10 KLOC, so small-project queries in that complexity band were extrapolating with no real support — a genuine data-coverage gap, not fixable by retraining on the same two datasets. This adds a third real dataset — [China (PROMISE repository)](https://github.com/Derek-Jones/Software-estimation-datasets/blob/master/china.arff), 499 software projects — to actually close that gap with real small projects instead of just flagging it.
+
+### Loading the raw file
+
+`data/raw/china.arff` is a standard ARFF file (verified directly: flat `@relation`, plain `@attribute name numeric` declarations, one comma-separated `@data` row per project, 499 rows, 19 columns — matches the file's own header exactly). Rather than add an external `arff` parsing dependency, `preprocessing.load_raw_arff()` (new, next to `load_raw_csv`) parses the `@attribute` list for column names/order and reads `@data` directly — deliberately not a general ARFF parser (documented in its own docstring: no nominal `{...}` categories, no sparse rows, no quoted strings), just enough for this file. Kept in `preprocessing.py` rather than a separate `src/load_china.py` for the same reason `load_raw_csv` lives there: it's a generic loading building block, and China's own column-mapping decisions belong in `unify_software.py` alongside COCOMO-NASA's and Desharnais's, not in a parallel module. The file has **zero missing values in any column** (verified directly), so no row-dropping or median-imputation was needed for any of its genuinely-present columns.
+
+### Column mapping decisions (verified against the actual downloaded data, not assumed)
+
+- **`project_size_kloc`**: `AFP` (Adjusted Function Points) × the same `BACKFIRE_LOC_PER_FP=100` Capers Jones heuristic already used for Desharnais, ÷ 1000 — identical treatment, for consistency.
+- **`effort_person_months`**: `Effort` (person-hours, confirmed range 26-54,620) ÷ `HOURS_PER_PERSON_MONTH=152` — **not** `N_effort`, per below.
+- **Excluded as leakage — confirmed, not assumed**:
+  - `PDR_AFP`, `PDR_UFP`, `NPDR_AFP`, `NPDU_UFP`: checked directly against the raw data. `PDR_AFP == Effort / AFP` — correlation **0.9999971**, max absolute difference **0.05** (rounding only). `NPDR_AFP == N_effort / AFP` identically. `PDR_UFP`/`NPDU_UFP` correlate 0.99 with their AFP-based counterparts (same ratios against unadjusted function points). These are the training target divided by a size measure — the exact same leakage category as the Team Size-via-`Effort`/`Length` derivation already rejected for Desharnais.
+  - `N_effort`: correlates **0.9863** with `Effort` itself (vs. 0.22-0.26 for the PDR/NPDR columns above) — clearly a variant/normalization of the target, not an independent input.
+  - `Duration`: the realized/actual project duration — not knowable before a project starts, same treatment as Desharnais's `Length`.
+  - `Dev.Type`: verified constant — `df['Dev.Type'].unique()` returns exactly `[0]` across all 499 rows. Zero signal, dropped.
+- **`team_experience`**: China's only people-related column is `Resource` (values 1-4, confirmed via `unique()`). Checked whether it's a usable team-size/experience proxy before treating it as one:
+  - Correlation with effort/size/duration is weak (0.16-0.25) and **not even monotonic** by group — median effort by `Resource` group is 1568 / 2361 / 4126 / 3344 for groups 1/2/3/4 respectively (group 4's median is *lower* than group 3's), which is not what a genuine ordinal team-size or experience measure would look like.
+  - Searched for the original PROMISE/Kitchenham documentation for this specific column (multiple queries, checked the Zenodo record page, several arXiv papers on software effort datasets) — found no source that defines what `Resource`'s 1-4 values represent. This is a genuinely undocumented column, not something this project failed to find.
+  - Given both the weak/non-monotonic signal and the absence of any documented meaning, `Resource` is **not** used as `team_experience`. Instead, `team_experience` is imputed the same honest way `complexity` already is for Desharnais: sampled from the REAL `team_experience` values observed in COCOMO-NASA + Desharnais combined (seeded `RNG_SEED=42`, a dedicated `RandomState` instance so this draw doesn't disturb Desharnais's existing complexity draw), not a single constant. Flagged via `source_dataset=2`, same honesty pattern as every other imputed value in this pipeline.
+- **`complexity`**: no analogous column, same treatment as Desharnais — sampled from COCOMO-NASA's own empirical complexity distribution, **reusing the exact same `complexity_dist` computed in `build_unified_dataframe()`** (not a separate/reimplemented distribution) via its own seeded `RandomState`.
+- **`source_dataset`**: extended from a binary 0/1 flag to `0=COCOMO-NASA, 1=Desharnais, 2=China`. Checked every downstream use before assuming this "just works": `app.py`'s `SOFTWARE_SOURCE_DEFAULT` uses `.mode()` (adapts automatically — now resolves to `2`, since China's 499 rows outnumber the other two combined), the "Historical Data Source" feature label/explanation text is dataset-count-agnostic (never said "two"), and the column is scaled/encoded nowhere as a binary-specific case (kept as a plain unscaled integer, same treatment as COCOMO's `forg` column, consistent with the existing 2-value design — not one-hot, since this project's tree models handle a small integer-coded categorical fine and the point of this column is only ever "which collection context," not an ordinal quantity). No code changes were needed anywhere outside `unify_software.py` for this to keep working correctly with three values.
+
+### Retraining (unify_software.py → train_new_domains.py, full pipeline rerun)
+
+**93 (COCOMO-NASA) + 77 (Desharnais) + 499 (China) = 669 unified rows** (up from 170) — a real, substantial mitigation of the "under 200 records" limitation, not just a modest one this time.
+
+| Model | MAE | RMSE | MMRE | PRED(25) |
+|---|---|---|---|---|
+| Linear Regression | 152.96 | 243.44 | 8.486 | 7.5% |
+| **Random Forest (selected)** | 130.84 | 419.88 | 2.165 | 20.1% |
+| XGBoost | 140.41 | 693.53 | 2.108 | 19.4% |
+| SVR | 106.84 | 315.98 | 1.166 | 15.7% |
+
+SVR has the lowest MAE (106.84), but — same as every prior selection in this project — it isn't tree-based, so it has no feature-importance support and is disqualified by the explainability hard requirement. Among tree-based models, Random Forest wins outright (both lowest MAE and highest PRED(25) of the tree-based candidates), so no tiebreak was needed there.
+
+**Honest comparison to before adding China** — this is not a one-sided improvement:
+
+| Metric | Before (170 rows) | After (669 rows) | Change |
+|---|---|---|---|
+| MAE | 267.63 | **130.84** | ↓ 51% (genuinely better) |
+| PRED(25) | 38.2% | **20.1%** | ↓ 18.1 points (genuinely worse) |
+| `source_dataset` importance | 0.017 | **0.183** | ↑ 10x |
+
+**MAE improved substantially** — expected, given nearly 4x the training data and a tree model that now has real small-project examples to split on instead of guessing. **PRED(25) got clearly worse, and that's stated plainly rather than hidden**: checked why directly on the test set — rows with actual effort under 5 months (17 of 134 test rows, all China-sourced) have a mean *relative* error of 5.13 and only an 11.8% PRED(25) rate, vs. 1.73 mean relative error / 21.4% PRED(25) for the rest. Adding China roughly quadrupled the dataset's size but also massively widened the target's range (0.17 to 2,400 person-months, where before it was 3.6 to 8,211 over a much smaller, more homogeneous pair of datasets) — a relative-error metric like PRED(25) is intrinsically harder to satisfy across a target distribution this heterogeneous, even as the model's absolute predictions (MAE) get meaningfully more accurate. Both things are true at once; this project reports both rather than only the flattering one.
+
+**`source_dataset` importance rising 10x (0.017 → 0.183) is also worth flagging honestly**, not quietly absorbed: the original "Validation the unification actually worked" section above used a *near-zero* `source_dataset` importance as evidence the model wasn't just learning "which dataset did this row come from." That evidence is weaker now — `source_dataset` is the model's 3rd-most-important feature (behind `project_size_kloc` at 0.55 and ahead of `team_experience` at 0.065, with `complexity` at 0.20). The honest read: China's rows are genuinely, systematically different in scale and distribution from COCOMO-NASA/Desharnais (different company, era, and size range), so knowing which collection a row came from legitimately helps the model — this isn't obviously "cheating" the way it would be if `source_dataset` alone could predict effort, but it is a real, worth-noting shift from the original unification's finding, and the paper should present it as such rather than repeating the old near-zero figure unqualified.
+
+### Sanity table — the actual fix, before vs. after adding China
+
+`team_experience=Intermediate, complexity=Nominal`, using the SAME `SOFTWARE_COMPLEXITY_COVERAGE` mechanism `app.py` already computes dynamically from `build_unified_dataframe()` (untouched — no code in `app.py` itself changed for this task):
+
+| KLOC | Before China (months) | After China (months) | Confidence note? |
+|---|---|---|---|
+| 1 | 25.38 | **5.47** | Yes — 1 KLOC is still just under the real minimum (1.2 KLOC) |
+| 5 | 30.64 | **7.69** | No — real coverage now extends below this |
+| 20 | 144.25 | 14.32 | No |
+| 50 | 423.82 | 44.96 | No |
+| 200 | 1,661.02 | 71.20 | No |
+| 1,000 | 2,407.61 | 894.58 | No |
+
+**Nominal-complexity coverage, directly**: before China, the smallest real Nominal-complexity project on record was 10 KLOC / 48 person-months (10 total Nominal rows in the whole dataset). After China, `SOFTWARE_COMPLEXITY_COVERAGE['n']` = **75 rows**, smallest real example **1.2 KLOC / 1.4 person-months** — a genuinely small, real project, not an imputed or extrapolated one (China rows do have imputed `complexity`, but the KLOC and effort values themselves are real historical data). 1 KLOC now predicts **5.47 months** — solidly in a "few months for a tiny project" range, down from 25.38 months (the previous fix) and 44.97 months (the original bug) — and the confidence-note mechanism correctly still flags it as marginally below the real minimum (1.2 KLOC) rather than silently presenting it with false confidence.
+
+**The mechanism genuinely didn't need touching, confirmed rather than assumed**: `SOFTWARE_COMPLEXITY_COVERAGE` and `predict_software()`'s confidence-note logic in `app.py` were not modified for this task. Re-running them after retraining shows the coverage numbers above update automatically (read live from `build_unified_dataframe()` at import time), and the note continues to fire correctly for genuinely unsupported inputs: `complexity='vl'` (Very Low) still has **zero** real rows anywhere in the combined 669-row dataset — COCOMO-NASA itself never rated any project "vl", and China's imputed complexity is drawn from COCOMO-NASA's own distribution, so it can never manufacture a `vl` row either — and every `vl` query at every KLOC level still gets the "no real historical project... has this complexity at all" note, exactly as designed before China existed.
+
+**Team Size — still absent, now checked against a third dataset too**: China's only people-related column (`Resource`) was investigated above and found to be an undocumented, weakly/non-monotonically-correlated value — not a headcount, and not treated as `team_experience` directly. The retrained model's feature set is unchanged: `team_experience`, `project_size_kloc`, `complexity`, `source_dataset`. No `team_size` column exists in any of the three source datasets now unified here.
+
+Saved as `models/final_model_software.pkl`, `models/final_scaler_software.pkl`, `models/final_encoder_software.pkl`, `data/processed/software_unified.csv` (669 rows) — same filenames as before, now trained on the 3-dataset union.
+
+## Region-selectable cost rate (business logic, not a model change)
+
+Software's derived "Predicted Cost" ($/person-month × effort) is now region-selectable across 6 markets instead of a single hardcoded constant — a business-rate lookup layered on top of the unaffected effort prediction above, not a retrain or a model change. Full writeup (all 6 rates and sources, the salary-vs-vendor-rate methodology caveat, and why Construction deliberately does not get this) is in `results/cost_regions_notes.md`.

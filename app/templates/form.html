@@ -24,14 +24,18 @@
   </div>
 
   <!-- ============ SOFTWARE FIELD GROUP (Software/Web, Mobile App, Enterprise/Other) ============ -->
-  <!-- Routes to models/final_model_software.pkl (the unified COCOMO-NASA + Desharnais model).
+  <!-- Routes to models/final_model_software.pkl (the unified COCOMO-NASA + Desharnais + China model).
        Team Experience / Project Size / Project Complexity genuinely feed the model — Team Size
        and Required Reliability were investigated and removed entirely (see
        results/software_unification_notes.md) rather than kept as decorative unused inputs.
        Planned Start Month/Year are NOT model inputs — they're only used to turn the predicted
        effort into an approximate "Estimated completion" date on the results page (app.py's
        compute_estimated_completion); Construction has no effort/duration prediction to attach
-       a start date to, so these two fields are software-only, same as the rest of this group. -->
+       a start date to, so these two fields are software-only, same as the rest of this group.
+       Cost Basis Region is also NOT a model input — it only selects which market's $/person-
+       month rate turns the model's (region-independent) effort prediction into a cost figure
+       (see results/cost_regions_notes.md). Construction's cost is a real, currency-denominated
+       ML prediction, not effort-times-rate, so it deliberately has no region field at all. -->
   <div class="form-section toggle-group" id="software-fields">
     <p class="section-label">Team &amp; Scope</p>
 
@@ -47,6 +51,19 @@
 
     <div class="field-group">
       <label for="project_size_kloc">Estimated Project Size (KLOC)</label>
+      <!-- Quick-fill presets: pure convenience for people who don't know what
+           "KLOC" means for their project. Clicking one just sets the SAME
+           numeric field below via JS (kloc-presets.js) — no new form field,
+           no new /predict parameter, the field stays freely editable before
+           and after. Values are data-derived percentiles, see app.py's
+           KLOC_PRESETS comment. Software domains only, same as this field. -->
+      <div class="kloc-presets" role="group" aria-label="Quick-fill project size">
+        {% for value, label, kloc in kloc_presets %}
+        <button type="button" class="kloc-preset-btn" data-kloc-preset="{{ value }}" data-kloc-value="{{ kloc }}">
+          {{ label }} <span class="kloc-preset-value">({{ kloc }} KLOC)</span>
+        </button>
+        {% endfor %}
+      </div>
       <input type="number" id="project_size_kloc" name="project_size_kloc" required min="0.1" max="{{ max_project_size_kloc }}" step="0.1"
              value="{{ form_values.get('project_size_kloc', '') }}">
       {% if errors.project_size_kloc %}<span class="field-error">{{ errors.project_size_kloc }}</span>{% endif %}
@@ -78,6 +95,17 @@
              value="{{ form_values.get('start_year', current_year) }}">
       <span class="field-hint">Used to turn the predicted effort into an approximate completion date.</span>
       {% if errors.start_year %}<span class="field-error">{{ errors.start_year }}</span>{% endif %}
+    </div>
+
+    <div class="field-group">
+      <label for="cost_region">Cost Basis Region</label>
+      <select id="cost_region" name="cost_region">
+        {% for value, label in cost_region_options %}
+        <option value="{{ value }}" {% if form_values.get('cost_region', 'us') == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <span class="field-hint">Predicted effort is unaffected — this only picks which market's $/person-month rate turns effort into cost.</span>
+      {% if errors.cost_region %}<span class="field-error">{{ errors.cost_region }}</span>{% endif %}
     </div>
   </div>
 
@@ -167,4 +195,5 @@
 </p>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ url_for('static', filename='kloc-presets.js') }}"></script>
 {% endblock %}

@@ -1,10 +1,15 @@
 """
 EstimateX — Step 4: cleaning & preprocessing.
 
-Reusable, importable building blocks for turning the two raw datasets
-(COCOMO-NASA, Desharnais) into model-ready feature matrices, plus two
-dataset-specific pipelines that apply them with the choices justified by
-the EDA in notebooks/01_eda.ipynb.
+Reusable, importable building blocks for turning raw datasets into
+model-ready feature matrices, plus two dataset-specific pipelines
+(COCOMO-NASA, Desharnais) that apply them with the choices justified by
+the EDA in notebooks/01_eda.ipynb. A third software dataset (China,
+PROMISE repository) was added later — it reuses this module's generic
+building blocks (load_raw_arff below, handle_missing_values, etc.) from
+src/unify_software.py directly, rather than getting its own pipeline
+function here, since it feeds straight into the unified software model
+instead of being evaluated standalone the way COCOMO-NASA/Desharnais were.
 
 This module is imported (not just run as a script) by later training code
 and by the deployed app, so every transform function is written to be
@@ -105,6 +110,57 @@ def load_raw_csv(path: str, na_placeholders=("?",)) -> pd.DataFrame:
     df = pd.read_csv(path)
     if na_placeholders:
         df = df.replace(list(na_placeholders), np.nan)
+    return df
+
+
+def load_raw_arff(path: str, na_placeholders=("?",)) -> pd.DataFrame:
+    """Read a raw ARFF file's @data section into a DataFrame, using the
+    file's own @attribute list for column names/order. Placed here rather
+    than in its own module (e.g. src/load_china.py) because it's a
+    generic building block in the same spirit as load_raw_csv above —
+    the dataset-specific column-mapping decisions for whatever's loaded
+    with it belong in that dataset's own unify_*.py, not here.
+
+    Deliberately NOT a general ARFF parser — it only handles what the
+    China (PROMISE) dataset's file actually uses: a flat @relation, plain
+    `@attribute name numeric` declarations (no {nominal,...} categories,
+    no sparse `{idx value, ...}` data rows, no quoted strings), and a
+    single comma-separated @data section. Good enough for this file
+    without pulling in an external `arff` dependency; would need
+    extending (or swapping for a real library) for a fancier ARFF file.
+    """
+    with open(path) as f:
+        lines = f.read().splitlines()
+
+    attribute_names = []
+    data_start = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("%"):
+            continue
+        lower = stripped.lower()
+        if lower.startswith("@attribute"):
+            # "@attribute NAME TYPE" — NAME is whatever token comes right
+            # after @attribute; TYPE (here always "numeric") is unused.
+            attribute_names.append(stripped.split()[1])
+        elif lower.startswith("@data"):
+            data_start = i + 1
+            break
+
+    if data_start is None:
+        raise ValueError(f"{path}: no @data section found")
+    if not attribute_names:
+        raise ValueError(f"{path}: no @attribute declarations found")
+
+    data_rows = [line.split(",") for line in lines[data_start:] if line.strip()]
+    df = pd.DataFrame(data_rows, columns=attribute_names)
+    if na_placeholders:
+        df = df.replace(list(na_placeholders), np.nan)
+    # ARFF's "numeric" type covers both ints and floats; every column here
+    # is read back as text by the split() above, so coerce uniformly —
+    # same reasoning as handle_missing_values' numeric_cols coercion.
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
 
