@@ -54,8 +54,8 @@ row.
      honest way to derive one from Desharnais's own columns, so it is
      imputed from COCOMO-NASA's own complexity distribution — a stated,
      documented default, not a fabricated measurement.
-   - REVISED (root-cause fix, see results/software_unification_notes.md
-     "Fixing unrealistic small-project predictions"): this used to fill
+   - REVISED (root-cause fix, "Fixing unrealistic small-project
+     predictions"): this used to fill
      ALL 77 Desharnais rows with COCOMO-NASA's single MODAL value ('h').
      That collapsed 79% of the unified 170-row dataset onto one
      complexity value, starving the other levels — especially 'n'
@@ -98,8 +98,7 @@ row.
      HOURS_PER_PERSON_MONTH conversion.
 
 6. THIRD DATASET ADDED: China (PROMISE repository, data/raw/china.arff,
-   499 rows) — see results/software_unification_notes.md, "Adding China
-   (PROMISE) for small-project coverage", for the full investigation.
+   499 rows), added for small-project coverage.
    Column mapping, verified against the actual downloaded file (not
    assumed from any prompt):
    - project_size_kloc: AFP (Adjusted Function Points) x

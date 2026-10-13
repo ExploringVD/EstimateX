@@ -1,15 +1,9 @@
 # EstimateX — Predicting Product Development Time and Cost Using Machine Learning
 
-## Results
+EstimateX is a machine learning system trained on historical project data that predicts software and construction project effort/cost across two independent project domains. Rather than acting as a black box, it explains its predictions through feature importance, and ships as a live, interactive Flask web app, not just a notebook.
 
-Random Forest is the final, deployed model for both datasets — the strongest combined MAE + PRED(25) performer in every comparison. Full numbers: [`results/model_comparison.csv`](results/model_comparison.csv) (raw table), [`results/final_model_decision.md`](results/final_model_decision.md) (why), [`results/feature_importance_summary.md`](results/feature_importance_summary.md) (what drives each prediction).
-
-| Dataset | Winning model | MAE | RMSE | MMRE | PRED(25) |
-|---|---|---|---|---|---|
-| COCOMO-NASA | Random Forest | 219.8 | 440.3 | 0.770 | 42.1% |
-| Desharnais | Random Forest | 2434.1 | 3343.4 | 0.414 | 25.0% |
-
-EstimateX is a machine learning system trained on historical project data — the COCOMO-NASA and Desharnais datasets — that predicts software/product development time and cost across two independent project domains. Rather than acting as a black box, it explains its predictions through feature importance, and ships as a live, interactive Flask web app, not just a notebook.
+- **Software** (Software/Web, Mobile App, Enterprise/Other) — one unified Random Forest model trained on COCOMO-NASA, Desharnais, and China (PROMISE repository), predicting effort in person-months.
+- **Construction** — a Random Forest model trained on the UCI Residential Building Data Set, predicting construction cost (native "10,000 IRR" units).
 
 ## Tech Stack
 
@@ -18,7 +12,7 @@ EstimateX is a machine learning system trained on historical project data — th
 - **scikit-learn** — preprocessing, Linear Regression, Random Forest, SVR
 - **XGBoost** — gradient-boosted comparison model
 - **Flask** — the deployed web interface (`app/`)
-- **matplotlib / seaborn** — EDA and results visualizations
+- **matplotlib / seaborn** — EDA and training-time comparison charts
 - **joblib** — model/preprocessing artifact persistence
 
 ## Folder Structure
@@ -26,44 +20,47 @@ EstimateX is a machine learning system trained on historical project data — th
 ```
 EstimateX/
 ├── data/
-│   ├── raw/                  # Original datasets, unmodified (cocomo_nasa.csv, desharnais.csv)
-│   └── processed/            # Cleaned + encoded data, and the train/test splits used everywhere
+│   ├── raw/                        # Original datasets, unmodified
+│   │   ├── cocomo_nasa.csv
+│   │   ├── desharnais.csv
+│   │   ├── china.arff
+│   │   └── construction_residential.csv
+│   └── processed/                  # Cleaned/encoded data and train/test splits for all domains
 ├── notebooks/
-│   └── 01_eda.ipynb          # Exploratory data analysis for both datasets
+│   └── 01_eda.ipynb                # Exploratory data analysis
 ├── src/
-│   ├── preprocessing.py      # Cleaning, encoding, scaling — shared by training AND the app
-│   ├── split_data.py         # Single source of truth for the train/test split (random_state=42)
-│   ├── train_models.py       # Trains + cross-validates all 4 algorithms on both datasets
-│   ├── evaluate.py           # Test-set MAE/RMSE/MMRE/PRED(25) + comparison charts
-│   ├── feature_importance.py # Feature importance rankings + charts for the tree models
-│   └── select_final_model.py # Picks and re-saves the final deployed model + preprocessing
-├── models/                   # Every trained model (.pkl) and fitted scaler/encoder (.joblib),
-│                              # plus the final_*.pkl / final_*.joblib artifacts the app actually loads
+│   ├── preprocessing.py            # Cleaning, encoding, scaling — shared building blocks
+│   ├── preprocess_construction.py  # Construction domain preprocessing
+│   ├── unify_software.py           # Merges COCOMO-NASA + Desharnais + China into one software dataset
+│   ├── convert_construction_raw.py # One-time Excel -> CSV conversion for the construction dataset
+│   ├── split_data.py               # Train/test split (random_state=42)
+│   ├── train_models.py             # Trains + cross-validates all 4 algorithms per dataset
+│   ├── evaluate.py                 # Test-set MAE/RMSE/MMRE/PRED(25) + comparison charts
+│   ├── feature_importance.py       # Feature importance rankings + charts for the tree models
+│   ├── select_final_model.py       # Picks and re-saves the final model + preprocessing artifacts
+│   └── train_new_domains.py        # Orchestrates the above for the Software-Unified + Construction domains
+├── models/                         # final_model_/final_scaler_/final_encoder_ {software,construction}.pkl
+│                                    # — the only artifacts the app actually loads at runtime
 ├── app/
-│   ├── app.py                 # Flask app — real predictions from the final trained models
-│   ├── requirements.txt       # Minimal deps to run just the app (no training/EDA tooling)
-│   ├── templates/              # form.html, results.html (Jinja2, extend base.html)
-│   └── static/style.css        # Shared styling
-├── results/
-│   ├── model_comparison.csv              # Full 4-model x 2-dataset x 4-metric results table
-│   ├── final_model_decision.md           # Why Random Forest was chosen
-│   ├── feature_importance_summary.md     # Plain-language explainability findings
-│   ├── testing_notes.md                  # End-to-end test results + one bug found & fixed
-│   ├── demo_script.md                    # Literal live-demo script with real, verified numbers
-│   ├── qa_prep.md                        # Answers to likely presentation questions
-│   └── *.png                             # MAE comparison + feature importance charts
-├── requirements.txt           # Full dependencies (EDA, training, and the app)
+│   ├── app.py                      # Flask app — real predictions from the final trained models
+│   ├── requirements.txt            # Minimal deps to run just the app (no training/EDA tooling)
+│   ├── templates/                  # form.html, results.html (Jinja2, extend base.html)
+│   └── static/                     # style.css, app.js, kloc-presets.js, results.js, favicon.png
+├── EstimateX.pptx                  # Slide deck
+├── requirements.txt                # Full dependencies (EDA, training, and the app)
 └── README.md
 ```
 
 ## Datasets
 
-Both datasets are sourced from the [PROMISE Software Engineering Repository](http://promise.site.uottawa.ca/SERepository) (also mirrored via OpenML/Zenodo/SEACRAFT). The repository distributes them in ARFF format; they were losslessly converted to plain CSV (attribute names and data values unchanged, only the ARFF metadata/header wrapper stripped) and stored unmodified in `data/raw/`.
-
-| Dataset | Source URL | Records | Description |
+| Dataset | Domain | Records | Description |
 |---|---|---|---|
-| **COCOMO-NASA** (`cocomo_nasa.csv`) | http://promise.site.uottawa.ca/SERepository/datasets/cocomonasa_2.arff | 93 | 93 NASA software projects (1971–1987) with size, effort-driver ratings (e.g. complexity, reliability, team capability), and actual development effort in person-months. |
-| **Desharnais** (`desharnais.csv`) | http://promise.site.uottawa.ca/SERepository/datasets/desharnais.arff | 81 | 81 software projects from a Canadian software house, with team/manager experience and function-point-based size measures against actual development effort in person-hours. |
+| **COCOMO-NASA** | Software | 93 | NASA software projects (1971–1987) with size, effort-driver ratings, and actual development effort in person-months. |
+| **Desharnais** | Software | 81 | Canadian software projects with team/manager experience and function-point-based size against actual effort in person-hours. |
+| **China** | Software | 499 | PROMISE repository software projects, added for small-project (low-KLOC) coverage. |
+| **UCI Residential Building** | Construction | 372 | Iranian residential construction projects with physical/financial variables and actual construction cost. |
+
+COCOMO-NASA and Desharnais are sourced from the [PROMISE Software Engineering Repository](http://promise.site.uottawa.ca/SERepository) (ARFF, losslessly converted to CSV). China is read directly from its original ARFF file. The construction dataset is from the [UCI Residential Building Data Set](https://archive.ics.uci.edu/dataset/437/residential+building+data+set), converted from its source Excel workbook via `src/convert_construction_raw.py`.
 
 ## Team
 
@@ -93,30 +90,31 @@ pip install -r app/requirements.txt
 python app/app.py
 ```
 
-Then open **http://127.0.0.1:5000/** in a browser, fill in the form, and click "Get estimate" — you'll get a real prediction from the trained Random Forest models plus a live feature-importance breakdown, not a placeholder. (macOS users: if you ever re-run model training and hit an XGBoost import error, it needs the OpenMP runtime — `brew install libomp` — but this isn't required just to run the app.)
+Then open **http://127.0.0.1:8000/** in a browser, fill in the form, and click "Get estimate" — you'll get a real prediction from the trained Random Forest models plus a live feature-importance breakdown, not a placeholder. (macOS users: if you ever re-run model training and hit an XGBoost import error, it needs the OpenMP runtime — `brew install libomp` — but this isn't required just to run the app.)
 
 ## Full Setup — reproduce the entire pipeline
 
-To regenerate everything from raw data through to the final deployed model:
+To regenerate everything from raw data through to the final deployed models (`models/final_model_software.pkl` and `models/final_model_construction.pkl`):
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-python src/preprocessing.py        # data/raw/*.csv -> data/processed/*_clean.csv
-python src/split_data.py           # -> data/processed/*_train.csv, *_test.csv
-python src/train_models.py         # trains + cross-validates all 4 models, saves to models/
-python src/evaluate.py             # -> results/model_comparison.csv + MAE charts
-python src/feature_importance.py   # -> results/feature_importance_*.png + printed rankings
-python src/select_final_model.py   # -> models/final_*.pkl + results/final_model_decision.md
+python src/preprocess_construction.py   # construction raw -> data/processed/construction_*.csv
+python src/unify_software.py            # cocomo_nasa + desharnais + china -> data/processed/software_unified*.csv
+python src/train_new_domains.py         # trains, evaluates, and selects the final software + construction models
 ```
 
 Each script is idempotent and safe to re-run — outputs are overwritten deterministically (fixed `random_state=42` throughout, defined once in `src/split_data.py`).
 
-## Presenting this project
+The original per-dataset pipeline (COCOMO-NASA and Desharnais trained and deployed separately, before they were unified into one software model) is still present and functional — `src/preprocessing.py`, `src/train_models.py`, `src/evaluate.py`, `src/feature_importance.py`, and `src/select_final_model.py` — and its generic functions are what `train_new_domains.py` reuses internally for the newer domains. Running it standalone regenerates the legacy `cocomo`/`desharnais` artifacts, which the app no longer loads:
 
-- [`results/demo_script.md`](results/demo_script.md) — exact inputs to use for a live demo, with the real results they produce.
-- [`results/qa_prep.md`](results/qa_prep.md) — grounded answers to likely questions (why Random Forest, what the metrics mean, why not deep learning, known limitations, etc.).
-- [`results/testing_notes.md`](results/testing_notes.md) — what was tested end-to-end, and the one bug that was found and fixed.
-- `EstimateX_Research_Paper_2 (1).docx` / `EstimateX.pptx` — the full paper and slide deck, both updated with real results.
+```bash
+python src/preprocessing.py
+python src/split_data.py
+python src/train_models.py
+python src/evaluate.py
+python src/feature_importance.py
+python src/select_final_model.py
+```

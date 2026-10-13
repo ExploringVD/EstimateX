@@ -48,11 +48,10 @@ sales price) and V-10 (actual construction cost).
   Persian-calendar year values are period-specific rather than a
   generalizable numeric signal.
 
-- V-7 (planned/estimated duration) IS kept as an input FEATURE. See
-  results/construction_domain_notes.md for why duration is used as a
-  predictor here but NOT offered as something this domain predicts —
-  the dataset never provides an "actual" duration outcome to train or
-  evaluate against, only a pre-construction planned figure.
+- V-7 (planned/estimated duration) IS kept as an input FEATURE. Duration
+  is used as a predictor here but NOT offered as something this domain
+  predicts — the dataset never provides an "actual" duration outcome to
+  train or evaluate against, only a pre-construction planned figure.
 
 Zero missing values were found anywhere in the raw sheet (confirmed at
 conversion time), so no imputation/row-dropping is needed here — unlike

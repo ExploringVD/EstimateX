@@ -7,7 +7,7 @@ datasets) saved by src/train_models.py, extracts their built-in
 horizontal bar chart per model.
 
 Linear Regression and SVR are intentionally excluded — see the "Scoping
-note" printed at the end and in results/feature_importance_summary.md:
+note" printed at the end:
 neither exposes a comparable feature-importance API (Linear Regression's
 coefficients aren't directly comparable across differently-scaled/encoded
 features without extra work, and sklearn's SVR with the default RBF

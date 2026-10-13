@@ -15,13 +15,12 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
 
 1. DOMAIN -> MODEL ROUTING. "Software/Web", "Mobile App", and
    "Enterprise/Other" all route to the SAME model, models/final_model_
-   software.pkl (the unified COCOMO-NASA + Desharnais + China model —
-   see results/software_unification_notes.md) — there is only one
-   trained software model, not three. Splitting the dropdown into three
-   labels is purely so a
-   user describing their project picks something that feels natural,
-   not because the underlying prediction differs by sub-domain; this is
-   stated here so it's never mistaken for three separate models.
+   software.pkl (the unified COCOMO-NASA + Desharnais + China model) —
+   there is only one trained software model, not three. Splitting the
+   dropdown into three labels is purely so a user describing their
+   project picks something that feels natural, not because the
+   underlying prediction differs by sub-domain; this is stated here so
+   it's never mistaken for three separate models.
    "Construction" routes to models/final_model_construction.pkl.
 
 2. SOFTWARE FORM FIELDS vs. THE UNIFIED MODEL'S ACTUAL FEATURES. The
@@ -43,21 +42,19 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
        (already established since Step 10; re-confirmed here).
    Full investigation and proof (re-ran the whole unification + training
    pipeline afterward — output came back byte-for-byte identical,
-   confirming there was truly nothing to add) is in
-   results/software_unification_notes.md.
+   confirming there was truly nothing to add) confirmed this.
    `source_dataset` has no real-world form equivalent either — it's a
    training-data-provenance flag, not a property of a new hypothetical
    project, so it isn't a form field at all. It's set to the MODE of the
    unified training data (computed at startup, see
    SOFTWARE_SOURCE_DEFAULT) — its feature importance is the lowest of
-   the 4 (~0.005, see results/feature_importance_software.png), so this
+   the 4 (~0.005), so this
    default has minimal effect on predictions either way.
 
 3. CONSTRUCTION FORM FIELDS. All 8 of the construction model's real
    features (locality, floor area, lot area, the three preliminary-cost
-   variants, planned duration, starting unit price — see
-   results/construction_domain_notes.md) are exposed as form fields
-   directly; none need to be defaulted, since none are "missing" from
+   variants, planned duration, starting unit price) are exposed as
+   form fields directly; none need to be defaulted, since none are "missing" from
    what a user would plausibly know before construction starts.
 
 4. CONSTRUCTION PREDICTS COST ONLY, NOT TIME. The dataset's own creators
@@ -73,18 +70,16 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
    only EFFORT. "Predicted Cost" for software is a DERIVED, illustrative
    figure: effort (in person-months) x an assumed $/person-month rate,
    in USD. That rate is now REGION-SELECTABLE (COST_REGIONS below,
-   default "United States") rather than a single constant — see
-   results/cost_regions_notes.md for why this is a safe business-rate
-   lookup change rather than a machine-learning change (the effort
-   prediction itself never changes with region, only the multiplier
-   applied to it afterward). Construction's cost, by contrast, is the
-   model's actual predicted target (V-10, "10000 IRR" units per
-   results/construction_domain_notes.md) — genuinely NOT a dollar
-   figure, so it is shown in its own native unit with an explicit label,
-   not converted or given a "$", and does NOT get a region selector
-   either (same file, "why Construction doesn't get this" — mixing an
-   Iranian-Rial-denominated, already-locality-aware ML prediction with a
-   generic software-salary figure would have no honest basis; see #8
+   default "United States") rather than a single constant — this is a
+   safe business-rate lookup change rather than a machine-learning change
+   (the effort prediction itself never changes with region, only the
+   multiplier applied to it afterward). Construction's cost, by contrast,
+   is the model's actual predicted target (V-10, "10000 IRR" units) —
+   genuinely NOT a dollar figure, so it is shown in its own native unit
+   with an explicit label, not converted or given a "$", and does NOT get
+   a region selector either ("why Construction doesn't get this" — mixing
+   an Iranian-Rial-denominated, already-locality-aware ML prediction with
+   a generic software-salary figure would have no honest basis; see #8
    below for why dual-currency display doesn't extend to Construction).
 
 6. DUAL CURRENCY DISPLAY (₹ / $) — SOFTWARE DOMAINS ONLY. Software's
@@ -127,10 +122,7 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
    with (assumption 4), so it gets neither the start-date inputs nor a
    completion-date line at all.
 
-10. REGION-SELECTABLE COST RATE — SOFTWARE DOMAINS ONLY. See
-    results/cost_regions_notes.md for the full writeup (all 6 rates,
-    sources, the salary-vs-vendor-rate methodology caveat, and the "why
-    Construction doesn't get this" reasoning in full). Short version:
+10. REGION-SELECTABLE COST RATE — SOFTWARE DOMAINS ONLY.
     software's $/person-month rate (assumption 5) is a business-rate
     lookup, not a trained model behavior — COST_REGIONS below holds 6
     representative markets, the form's "Cost basis region" dropdown
@@ -196,8 +188,7 @@ PROCESSED_DIR = os.path.join(PROJECT_ROOT, "data", "processed")
 # unaffected by region.
 #
 # Six representative markets, (value, label, $/person-month). Sourced and
-# spot-checked 2026-09-12 — see results/cost_regions_notes.md for the full
-# writeup, every source, and the explicit caveat below.
+# spot-checked 2026-09-12 — every source and the explicit caveat is below.
 #   - us: $9,300/mo — ZipRecruiter Sept 2026 US national avg software
 #     developer salary ($111,845/yr / 12 = $9,320/mo, rounded to $9,300).
 #     SPOT-CHECKED directly against ziprecruiter.com/Salaries/Software-
@@ -498,8 +489,7 @@ SOFTWARE_SOURCE_DEFAULT = int(_unified_df[SOURCE_COL].mode().iloc[0])
 # Training-data coverage per complexity level (RAW, unscaled units) — lets
 # predict_software() honestly flag a request that extrapolates beyond any
 # real historical example the model was actually trained on, instead of
-# presenting a number with false confidence. See
-# results/software_unification_notes.md: originally (COCOMO-NASA +
+# presenting a number with false confidence. Originally (COCOMO-NASA +
 # Desharnais only) the smallest real Nominal-complexity project on record
 # was 10 KLOC / 48 person-months, so a 1-KLOC "Nominal" query had ZERO
 # comparable real training row — documented as an "Honest residual
@@ -694,9 +684,8 @@ def predict_software(complexity: str, team_experience: str, kloc: float, cost_re
         )
 
     # Region-selectable $/person-month rate — a business-rate lookup, not
-    # a model behavior (see COST_REGIONS above / results/cost_regions_
-    # notes.md). Effort prediction above is entirely unaffected by region;
-    # only this multiplier changes.
+    # a model behavior (see COST_REGIONS above). Effort prediction above
+    # is entirely unaffected by region; only this multiplier changes.
     cost_rate = COST_REGION_RATES[cost_region]
 
     return {

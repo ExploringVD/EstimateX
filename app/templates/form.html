@@ -26,16 +26,16 @@
   <!-- ============ SOFTWARE FIELD GROUP (Software/Web, Mobile App, Enterprise/Other) ============ -->
   <!-- Routes to models/final_model_software.pkl (the unified COCOMO-NASA + Desharnais + China model).
        Team Experience / Project Size / Project Complexity genuinely feed the model — Team Size
-       and Required Reliability were investigated and removed entirely (see
-       results/software_unification_notes.md) rather than kept as decorative unused inputs.
+       and Required Reliability were investigated and removed entirely rather than kept as
+       decorative unused inputs.
        Planned Start Month/Year are NOT model inputs — they're only used to turn the predicted
        effort into an approximate "Estimated completion" date on the results page (app.py's
        compute_estimated_completion); Construction has no effort/duration prediction to attach
        a start date to, so these two fields are software-only, same as the rest of this group.
        Cost Basis Region is also NOT a model input — it only selects which market's $/person-
-       month rate turns the model's (region-independent) effort prediction into a cost figure
-       (see results/cost_regions_notes.md). Construction's cost is a real, currency-denominated
-       ML prediction, not effort-times-rate, so it deliberately has no region field at all. -->
+       month rate turns the model's (region-independent) effort prediction into a cost figure.
+       Construction's cost is a real, currency-denominated ML prediction, not effort-times-rate,
+       so it deliberately has no region field at all. -->
   <div class="form-section toggle-group" id="software-fields">
     <p class="section-label">Team &amp; Scope</p>
 
@@ -110,8 +110,8 @@
   </div>
 
   <!-- ============ CONSTRUCTION FIELD GROUP ============ -->
-  <!-- Real columns from results/construction_domain_notes.md (UCI Residential Building
-       dataset), not generic placeholders. Routes to models/final_model_construction.pkl. -->
+  <!-- Real columns from the UCI Residential Building dataset, not generic placeholders.
+       Routes to models/final_model_construction.pkl. -->
   <div class="form-section toggle-group" id="construction-fields" hidden>
     <p class="section-label">Project Location &amp; Size</p>
 
