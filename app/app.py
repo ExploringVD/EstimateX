@@ -142,6 +142,7 @@ import os
 import sys
 from datetime import date
 
+import numpy as np
 import pandas as pd
 from flask import Flask, render_template, request
 
@@ -149,25 +150,17 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
 from preprocessing import (  # noqa: E402
+    COCOMO_ORDINAL_COLS,
     COCOMO_ORDINAL_SCALE,
     encode_onehot,
-    encode_ordinal,
     load_artifact,
     scale_numeric_features,
-)
-from unify_software import (  # noqa: E402
-    COMPLEXITY_COL,
-    PROJECT_SIZE_COL,
-    SCALE_COLS as SOFTWARE_SCALE_COLS,
-    SOURCE_COL,
-    TARGET_COL as SOFTWARE_TARGET_COL,
-    TEAM_EXPERIENCE_COL,
-    build_unified_dataframe,
 )
 from preprocess_construction import (  # noqa: E402
     NUMERIC_COLS as CONSTRUCTION_NUMERIC_COLS,
     ONEHOT_COLS as CONSTRUCTION_ONEHOT_COLS,
 )
+from train_software_cocomo import CplxOffsetRidge  # noqa: E402,F401 — needed for joblib to unpickle SOFTWARE_MODEL
 
 app = Flask(__name__)
 
@@ -253,23 +246,15 @@ MAX_PROJECT_SIZE_KLOC = 100_000
 # otherwise type into by hand; the backend never sees anything but that
 # one existing field, exactly as before.
 #
-# Values are the 25th / 50th / 75th percentile of project_size_kloc
-# across the full combined COCOMO-NASA + Desharnais + China unified
-# training data (see src/unify_software.build_unified_dataframe()) —
-# data-derived, not round-number guesses. Verified directly against a
-# live rebuild of that data (2026-09-12): actual percentiles came back
-# 11.5 / 23.4 / 48.7 KLOC over 669 rows (vs. this feature's originally
-# supplied 12 / 24 / 50 over a claimed 671 rows) — close enough (within
-# ~4%) that the small discrepancy is almost certainly just which exact
-# pipeline rerun/imputation draw the percentiles were read from, not a
-# different definition. The clean round numbers below are kept as the
-# user-facing presets (a "Small" button reading 11.5 KLOC would look like
-# a typo, not a deliberate choice) while this comment keeps the verified
-# real numbers on record.
+# Values are the 25th / 50th / 75th percentile of equivphyskloc across
+# COCOMO-NASA's own 93 rows (data/raw/cocomo_nasa.csv) — recomputed here
+# because the deployed model is now trained on COCOMO-NASA alone, not the
+# old China+Desharnais+COCOMO unified blend these presets used to be
+# derived from.
 KLOC_PRESETS = [
-    ("small", "Small", 12),
-    ("medium", "Medium", 24),
-    ("large", "Large", 50),
+    ("small", "Small", 15.4),
+    ("medium", "Medium", 47.5),
+    ("large", "Large", 111),
 ]
 
 DOMAIN_OPTIONS = [
@@ -299,6 +284,59 @@ ORDINAL_VALUES = {v for v, _ in ORDINAL_OPTIONS}
 LOCALITY_OPTIONS = list(range(1, 21))  # the dataset's own 20 zone codes
 LOCALITY_VALUES = {str(v) for v in LOCALITY_OPTIONS}
 
+# Team Experience (the single form dropdown above) maps onto FIVE of
+# COCOMO-NASA's 15 drivers at once — the ones that are genuinely about
+# the team's own skill/experience, not the project itself: acap (Analyst
+# Capability), aexp (Applications Experience), pcap (Programmer
+# Capability), vexp (Virtual Machine Experience), lexp (Programming
+# Language Experience). An Advanced override for any one of these (see
+# ADVANCED_DRIVER_COLS below) replaces this mapped default for that
+# single driver only — the other four still follow Team Experience.
+TEAM_EXPERIENCE_TO_ORDINAL = {"0": "vl", "1": "l", "2": "n", "3": "h", "4": "vh"}
+EXPERIENCE_LINKED_DRIVERS = ["acap", "aexp", "pcap", "vexp", "lexp"]
+
+# The remaining 9 of COCOMO-NASA's 15 drivers (cplx is its own top-level
+# "Project Complexity" field, not here) — every one of these is exposed
+# ONLY in the collapsible "Advanced cost drivers" section, defaulting to
+# Nominal, per the brief.
+ADVANCED_ONLY_DRIVERS = ["rely", "data", "time", "stor", "virt", "turn", "modp", "tool", "sced"]
+ADVANCED_DRIVER_COLS = EXPERIENCE_LINKED_DRIVERS + ADVANCED_ONLY_DRIVERS
+
+# Sentinel submitted for an Advanced experience-linked driver left at its
+# default "Auto" option — means "use the Team Experience mapping," not a
+# literal ordinal level. Only meaningful for EXPERIENCE_LINKED_DRIVERS;
+# ADVANCED_ONLY_DRIVERS have no such auto-default, they're literally
+# Nominal unless changed.
+ADVANCED_AUTO_VALUE = ""
+ADVANCED_EXPERIENCE_DRIVER_OPTIONS = [(ADVANCED_AUTO_VALUE, "Auto (from Team Experience)")] + ORDINAL_OPTIONS
+
+# Human-readable name + one-line hint per COCOMO-81 development mode —
+# shown as the "Development mode" dropdown, software domains only.
+DEV_MODE_OPTIONS = [
+    ("organic", "Organic", "Small, experienced team; familiar, in-house work; flexible requirements."),
+    ("semidetached", "Semi-detached", "A mix of team experience and requirement flexibility — the middle ground."),
+    ("embedded", "Embedded", "Tight constraints (hardware, regulations, interfaces); large or inflexible requirements."),
+]
+DEV_MODE_VALUES = {v for v, _, _ in DEV_MODE_OPTIONS}
+DEV_MODE_LABELS = {v: label for v, label, _ in DEV_MODE_OPTIONS}
+DEFAULT_DEV_MODE = "organic"
+
+# Project category — derived from the predicted effort alone (see
+# predict_software / compute_project_category below), NOT a separate
+# classifier. 150 person-months (~12.5 person-years) is the reference
+# point; the 120-190 PM band around it is deliberately wide (not a sharp
+# cutoff at 150) because the regression itself has real error, so a
+# prediction landing close to 150 on either side is reported as
+# genuinely borderline rather than confidently placed in one bucket.
+PROJECT_CATEGORY_LOW_MAX_PM = 120
+PROJECT_CATEGORY_HIGH_MIN_PM = 190
+PROJECT_CATEGORY_REFERENCE_PM = 150
+PROJECT_CATEGORY_LABELS = {
+    "below": "Up to 150 person-months",
+    "borderline": "Borderline (around 150 person-months)",
+    "above": "Above 150 person-months",
+}
+
 # Planned start month/year -> estimated completion date (software domains
 # only — see predict_software / compute_estimated_completion below).
 # Construction never predicts effort/duration at all (assumption 4 in the
@@ -319,6 +357,11 @@ DEFAULT_FORM_VALUES = {
     "team_experience": "2",
     "project_size_kloc": "50",
     "complexity": "n",
+    "dev_mode": DEFAULT_DEV_MODE,
+    # Advanced cost drivers — experience-linked ones default to "Auto"
+    # (follow Team Experience); the rest default to Nominal ("n").
+    **{f"adv_{driver}": ADVANCED_AUTO_VALUE for driver in EXPERIENCE_LINKED_DRIVERS},
+    **{f"adv_{driver}": "n" for driver in ADVANCED_ONLY_DRIVERS},
     "start_month": "1",
     "start_year": str(CURRENT_YEAR),
     "cost_region": DEFAULT_COST_REGION,
@@ -332,12 +375,9 @@ DEFAULT_FORM_VALUES = {
     "unit_price_start": "805",
 }
 
-# Friendlier labels for the feature-importance chart / factor list.
+# Friendlier labels for the feature-importance chart / factor list —
+# CONSTRUCTION ONLY now (software has its own COCOMO_DRIVER_LABELS below).
 FEATURE_LABELS = {
-    "team_experience": "Team Experience",
-    "project_size_kloc": "Project Size (KLOC)",
-    "complexity": "Project Complexity",
-    "source_dataset": "Historical Data Source",
     "floor_area_m2": "Total Floor Area",
     "lot_area_m2": "Lot Area",
     "prelim_est_cost_total": "Preliminary Cost Estimate (Total)",
@@ -348,12 +388,8 @@ FEATURE_LABELS = {
     "locality": "Locality Zone",
 }
 
-# Why each factor TYPE generally moves an estimate — see assumption 7.
+# Why each factor TYPE generally moves an estimate — CONSTRUCTION ONLY now.
 FEATURE_EXPLANATIONS = {
-    "team_experience": "team experience shapes how efficiently the work gets done, which pulls the estimate in one direction or the other",
-    "project_size_kloc": "larger codebases require proportionally more implementation and testing effort, which scales the estimate up",
-    "complexity": "higher complexity ratings mean more intricate logic and integration work, which increases the estimate",
-    "source_dataset": "reflects which historical dataset this project's profile most resembles — a modeling artifact, not something you control",
     "floor_area_m2": "bigger buildings require more materials and labor, which scales the estimate up",
     "lot_area_m2": "larger lots are often associated with bigger or more complex site work",
     "prelim_est_cost_total": "the total preliminary estimate made before construction — historically a strong predictor of the final cost",
@@ -364,26 +400,68 @@ FEATURE_EXPLANATIONS = {
     "locality": "captures location-specific cost patterns from historical projects in this same zone",
 }
 
+# COCOMO-81's own names for its 15 effort-driver ratings, plus the two
+# non-driver software inputs (kloc, mode) — SOFTWARE ONLY. Used by
+# rank_cocomo_drivers/build_cocomo_factor_sentences for the "what drove
+# this estimate" bars and sentences.
+COCOMO_DRIVER_LABELS = {
+    "rely": "Required Reliability",
+    "data": "Database Size",
+    "cplx": "Product Complexity",
+    "time": "Execution Time Constraint",
+    "stor": "Main Storage Constraint",
+    "virt": "Platform Volatility",
+    "turn": "Computer Turnaround Time",
+    "acap": "Analyst Capability",
+    "aexp": "Applications Experience",
+    "pcap": "Programmer Capability",
+    "vexp": "Virtual Machine Experience",
+    "lexp": "Language Experience",
+    "modp": "Modern Programming Practices",
+    "tool": "Use of Software Tools",
+    "sced": "Required Development Schedule",
+    "kloc": "Project Size (KLOC)",
+    "mode": "Development Mode",
+}
+
+# Why each driver generally moves the estimate — SOFTWARE ONLY, used as a
+# fallback only when the per-request direction is near-zero (see
+# build_cocomo_factor_sentences; the direction-aware phrasing is the
+# primary wording, this is just color for the "close to typical" case).
+COCOMO_DRIVER_EXPLANATIONS = {
+    "rely": "how much reliability failures would cost shapes how much verification effort the project needs",
+    "data": "a larger database relative to program size raises data-management effort",
+    "cplx": "more intricate logic and integration work increases the estimate",
+    "time": "a tighter runtime-performance constraint requires more tuning and optimization effort",
+    "stor": "a tighter memory/storage constraint requires more optimization effort",
+    "virt": "a more volatile underlying platform forces more rework as it changes under the project",
+    "turn": "slower computer turnaround time historically cost developers more waiting/debugging time",
+    "acap": "stronger analysts historically deliver the same scope in less effort",
+    "aexp": "more experience with this application domain reduces ramp-up and rework",
+    "pcap": "stronger programmers historically deliver the same scope in less effort",
+    "vexp": "more experience with the target platform reduces ramp-up time",
+    "lexp": "more experience with the implementation language reduces ramp-up time",
+    "modp": "modern, disciplined programming practices historically reduce rework",
+    "tool": "better software tooling historically reduces manual effort",
+    "sced": "a compressed schedule relative to the project's natural pace costs extra coordination effort",
+    "kloc": "larger codebases require proportionally more implementation and testing effort",
+    "mode": "development mode captures how tightly constrained and how experienced/flexible the project is overall",
+}
+
 # Features whose relationship to the estimate has a clear, already-
 # documented sign in FEATURE_EXPLANATIONS above ("higher X increases/
 # scales up the estimate"). For these, build_factor_sentences() below
 # states whether THIS request's value is above or below what's typical in
 # the training data, instead of always saying "higher X increases the
-# estimate" regardless of whether the actual value is low or high — the
-# bug this fixes: a Low-complexity request still read "higher complexity
-# ratings... increases the estimate," which contradicts the Low pick.
+# estimate" regardless of whether the actual value is low or high.
+# CONSTRUCTION ONLY now — software's linear model states direction from
+# the signed coefficient contribution directly (see
+# build_cocomo_factor_sentences), not from this z-score mechanism.
 #
-# team_experience, source_dataset, and locality are deliberately NOT
-# here: team_experience's relationship is genuinely two-directional (more
-# OR less experience can be the efficient direction depending on the
-# project — there's no single "more is worse/better" sign to state, which
-# is why its existing wording already says "pulls the estimate in one
-# direction or the other" rather than claiming a fixed direction), and
-# source_dataset/locality are categorical/provenance flags with no
-# meaningful "typical value" to be above or below. Their existing neutral
-# phrasing is correct and is left untouched.
+# locality is deliberately NOT here: it's a categorical/provenance flag
+# with no meaningful "typical value" to be above or below. Its existing
+# neutral phrasing is correct and is left untouched.
 DIRECTIONAL_FEATURES = {
-    "complexity", "project_size_kloc",
     "floor_area_m2", "lot_area_m2", "prelim_est_cost_total", "prelim_est_cost",
     "prelim_est_cost_equiv", "unit_price_start", "planned_duration",
 }
@@ -406,10 +484,6 @@ def _format_directional_value(raw_feature: str, raw_value) -> str:
     this app (form.html's field labels/hints) rather than inventing new
     ones.
     """
-    if raw_feature == COMPLEXITY_COL:
-        return f"{ORDINAL_LABELS.get(raw_value, raw_value)} complexity rating"
-    if raw_feature == PROJECT_SIZE_COL:
-        return f"{raw_value:g} KLOC size"
     if raw_feature == "floor_area_m2":
         return f"{raw_value:g} m² floor area"
     if raw_feature == "lot_area_m2":
@@ -473,64 +547,86 @@ def explain_feature(raw_name: str) -> str:
 # for both domains.
 # ---------------------------------------------------------------------------
 
-SOFTWARE_MODEL = load_artifact(f"{MODELS_DIR}/final_model_software.pkl")
-SOFTWARE_SCALER = load_artifact(f"{MODELS_DIR}/final_scaler_software.pkl")
-SOFTWARE_ENCODER = load_artifact(f"{MODELS_DIR}/final_encoder_software.pkl")  # OrdinalEncoder, complexity
+SOFTWARE_MODEL = load_artifact(f"{MODELS_DIR}/final_model_software.pkl")  # CplxOffsetRidge, log(effort), COCOMO-NASA's 15 drivers
+SOFTWARE_METADATA = load_artifact(f"{MODELS_DIR}/final_model_software_metadata.pkl")
 
 CONSTRUCTION_MODEL = load_artifact(f"{MODELS_DIR}/final_model_construction.pkl")
 CONSTRUCTION_SCALER = load_artifact(f"{MODELS_DIR}/final_scaler_construction.pkl")
 CONSTRUCTION_ENCODER = load_artifact(f"{MODELS_DIR}/final_encoder_construction.pkl")  # OneHotEncoder, locality
 
-# Mode of source_dataset in the unified training data — see assumption 2.
-_unified_df = pd.read_csv(f"{PROCESSED_DIR}/software_unified.csv")
-SOFTWARE_SOURCE_DEFAULT = int(_unified_df[SOURCE_COL].mode().iloc[0])
+# SOFTWARE_MODEL.ridge_ is the fitted Ridge(alpha=0.1, positive=True) on
+# the 14 non-cplx drivers + log_kloc + mode; cplx itself is a FIXED
+# weight=1 offset, never fitted (see src/train_software_cocomo.py's
+# CplxOffsetRidge — this guarantees complexity's effect is Boehm's own
+# monotonically-increasing published multiplier table, not whatever sign
+# a free regression coefficient happens to land on under multicollinearity).
+SOFTWARE_COEF = dict(zip(SOFTWARE_MODEL.feature_names_, SOFTWARE_MODEL.ridge_.coef_))
+SOFTWARE_TRAINING_MEAN = SOFTWARE_METADATA["training_mean"]
+SOFTWARE_EM_TABLE = SOFTWARE_METADATA["em_table"]
+SOFTWARE_CPLX_OFFSET_COL = SOFTWARE_METADATA["cplx_offset_col"]
+SOFTWARE_CPLX_WEIGHT = SOFTWARE_METADATA["cplx_weight"]
+
+
+def get_cocomo_em(driver: str, level: str) -> float:
+    """Boehm-1981 published effort multiplier for `driver` at `level`,
+    falling back to the nearest level this specific driver has a
+    published value for (e.g. TIME has no VL/L entries) — same lookup
+    src/train_software_cocomo.py uses at training time.
+    """
+    defined = SOFTWARE_EM_TABLE[driver]
+    if level in defined:
+        return defined[level]
+    idx = COCOMO_ORDINAL_SCALE.index(level)
+    nearest = min(defined, key=lambda lv: abs(COCOMO_ORDINAL_SCALE.index(lv) - idx))
+    return defined[nearest]
 
 # ---------------------------------------------------------------------------
-# Training-data coverage per complexity level (RAW, unscaled units) — lets
+# Training-data coverage, COCOMO-NASA's own 93 rows (RAW units) — lets
 # predict_software() honestly flag a request that extrapolates beyond any
-# real historical example the model was actually trained on, instead of
-# presenting a number with false confidence. Originally (COCOMO-NASA +
-# Desharnais only) the smallest real Nominal-complexity project on record
-# was 10 KLOC / 48 person-months, so a 1-KLOC "Nominal" query had ZERO
-# comparable real training row — documented as an "Honest residual
-# limitation — not fixable by retraining" on those two datasets alone.
-# Adding China (see "Adding China (PROMISE) for small-project coverage")
-# genuinely closed most of that gap — Nominal-complexity coverage now
-# extends down to a real 1.2 KLOC / 1.4 person-month project — but this
-# mechanism is kept regardless, since SOME complexity levels (e.g. "Very
-# Low," which no real project in any of the three datasets has ever been
-# rated) still have zero or thin real coverage. The model isn't
+# real historical example the model was actually trained on: a KLOC outside
+# the real [min, max] range, or any of the 15 driver ratings at a level no
+# real NASA project in the training data was ever rated at for that
+# specific driver (e.g. acap/pcap have no "Very Low" or "Low" project on
+# record at all — see src/train_software_cocomo.py). The model isn't
 # malfunctioning when this fires — it's extrapolating into a region with
-# no real support, and a tree model's leaf-average behavior there is not
-# the same thing as a wrong prediction on a request the training data
-# actually covers.
+# no real support.
 # ---------------------------------------------------------------------------
-_raw_unified_df = build_unified_dataframe()  # pre-scaling — real KLOC/effort units
-SOFTWARE_COMPLEXITY_COVERAGE: dict[str, dict] = {}
-for _level in COCOMO_ORDINAL_SCALE:
-    _subset = _raw_unified_df[_raw_unified_df[COMPLEXITY_COL] == _level]
-    if len(_subset) == 0:
-        SOFTWARE_COMPLEXITY_COVERAGE[_level] = {"count": 0}
-        continue
-    _smallest = _subset.loc[_subset[PROJECT_SIZE_COL].idxmin()]
-    SOFTWARE_COMPLEXITY_COVERAGE[_level] = {
-        "count": int(len(_subset)),
-        "min_kloc": float(_smallest[PROJECT_SIZE_COL]),
-        "min_kloc_effort": float(_smallest[SOFTWARE_TARGET_COL]),
-    }
-del _level, _subset  # loop vars, not meant to leak as module "constants"
+_cocomo_raw_df = pd.read_csv(f"{PROJECT_ROOT}/data/raw/cocomo_nasa.csv")
+SOFTWARE_KLOC_COVERAGE = {
+    "min_kloc": float(_cocomo_raw_df["equivphyskloc"].min()),
+    "max_kloc": float(_cocomo_raw_df["equivphyskloc"].max()),
+}
+SOFTWARE_DRIVER_COVERAGE: dict[str, dict[str, dict]] = {}
+for _driver in COCOMO_ORDINAL_COLS:
+    _driver_levels: dict[str, dict] = {}
+    for _level, _subset in _cocomo_raw_df.groupby(_driver):
+        _example = _subset.loc[_subset["equivphyskloc"].sub(_subset["equivphyskloc"].median()).abs().idxmin()]
+        _driver_levels[_level] = {
+            "count": int(len(_subset)),
+            "example_kloc": float(_example["equivphyskloc"]),
+            "example_effort": float(_example["act_effort"]),
+        }
+    SOFTWARE_DRIVER_COVERAGE[_driver] = _driver_levels
+del _driver, _driver_levels, _level, _subset, _example  # loop vars, not meant to leak as module "constants"
+
+
+def _nearest_observed_level(driver: str, requested_level: str) -> str:
+    """The closest (by ordinal distance on the vl..xh scale) level that
+    DOES have real training coverage for this driver — used to name a
+    real comparable example in the confidence note instead of just
+    saying "no data."
+    """
+    observed = SOFTWARE_DRIVER_COVERAGE[driver]
+    requested_idx = COCOMO_ORDINAL_SCALE.index(requested_level)
+    return min(observed, key=lambda lvl: abs(COCOMO_ORDINAL_SCALE.index(lvl) - requested_idx))
 
 
 # ---------------------------------------------------------------------------
 # Transform-only preprocessing (reuses src/preprocessing.py's exact
-# functions with the loaded, already-fitted scaler/encoders).
+# functions with the loaded, already-fitted scaler/encoders — construction
+# only; software's COCOMO feature row is built by build_cocomo_feature_row
+# below, driven by SOFTWARE_METADATA rather than a fitted scaler/encoder).
 # ---------------------------------------------------------------------------
-
-def transform_software_row(raw_row_df: pd.DataFrame) -> pd.DataFrame:
-    df, _ = encode_ordinal(raw_row_df, [COMPLEXITY_COL], COCOMO_ORDINAL_SCALE, encoder=SOFTWARE_ENCODER)
-    df, _ = scale_numeric_features(df, SOFTWARE_SCALE_COLS, scaler=SOFTWARE_SCALER)
-    return df[SOFTWARE_MODEL.feature_names_in_]
-
 
 def transform_construction_row(raw_row_df: pd.DataFrame) -> pd.DataFrame:
     df, _ = encode_onehot(raw_row_df, CONSTRUCTION_ONEHOT_COLS, encoder=CONSTRUCTION_ENCODER)
@@ -546,6 +642,10 @@ def rank_features_for_request(model, transformed_row: pd.DataFrame) -> list[dict
     (as "z") purely so build_factor_sentences() can state DIRECTION for
     DIRECTIONAL_FEATURES; it plays no part in the salience math or the
     ranking/ordering above, both of which stay magnitude-only.
+
+    CONSTRUCTION ONLY now — software's linear model has its own
+    coefficient-based explainability (rank_cocomo_drivers), since a tree
+    model's .feature_importances_ doesn't apply to it.
     """
     importances = model.feature_importances_
     signed_values = transformed_row.iloc[0].to_numpy()
@@ -572,23 +672,202 @@ def rank_features_for_request(model, transformed_row: pd.DataFrame) -> list[dict
     return rows
 
 
+# ---------------------------------------------------------------------------
+# Software (COCOMO-NASA) explainability — a log-linear model's
+# coefficients give an EXACT signed per-request contribution, so this
+# doesn't need the magnitude-only salience/z-score mechanism above (that
+# stays construction-only, see rank_features_for_request).
+# ---------------------------------------------------------------------------
+
+COCOMO_NEAR_TYPICAL_MULTIPLIER_PCT = 3.0  # |effort multiplier| below this reads as "close to typical"
+
+
+def build_cocomo_feature_row(driver_levels: dict[str, str], kloc: float, mode: str) -> pd.DataFrame:
+    """The exact row src/train_software_cocomo.py's CplxOffsetRidge
+    expects: log(published EM) for the 14 non-cplx drivers, log(kloc),
+    one-hot `mode`, and the cplx offset column (SOFTWARE_CPLX_OFFSET_COL)
+    — NOT a raw 0-5 ordinal index (see SOFTWARE_MODEL's loading comment
+    above for why).
+    """
+    row = {
+        driver: np.log(get_cocomo_em(driver, driver_levels[driver]))
+        for driver in SOFTWARE_METADATA["non_cplx_drivers"]
+    }
+    row["log_kloc"] = np.log(kloc)
+    for cat in SOFTWARE_METADATA["mode_categories"]:
+        row[f"mode_{cat}"] = 1 if cat == mode else 0
+    row[SOFTWARE_CPLX_OFFSET_COL] = np.log(get_cocomo_em("cplx", driver_levels["cplx"]))
+    return pd.DataFrame([row])[SOFTWARE_METADATA["feature_order"] + [SOFTWARE_CPLX_OFFSET_COL]]
+
+
+def rank_cocomo_drivers(driver_levels: dict[str, str], kloc: float, mode: str) -> list[dict]:
+    """Per-request contribution of each LOGICAL driver (the 15 ordinal
+    ratings individually, plus one combined "kloc" and one combined
+    "mode" entry for their underlying raw columns — log_kloc is one
+    column already, but mode_embedded/mode_organic/mode_semidetached are
+    three one-hot columns that represent a single user choice, so their
+    contributions are summed into one entry rather than shown as three
+    separate, confusing bars) = weight x (value - training mean), on the
+    log scale (see module docstring Part B2). 14 of the 15 drivers use
+    their FITTED Ridge weight; `cplx` uses its FIXED weight of
+    SOFTWARE_CPLX_WEIGHT (1.0) on its own published EM value, exactly
+    like src/train_software_cocomo.py's CplxOffsetRidge does internally
+    at prediction time — so cplx's contribution is always positive for
+    above-Nominal complexity, by construction. Converted to an effort
+    multiplier vs. a typical project: exp(contribution) - 1.
+
+    Top TOP_N_FEATURES by |contribution| are returned, bar-width `pct`
+    computed the same way as rank_features_for_request (share of the
+    shown rows' total |contribution|, NOT the multiplier itself — the
+    multiplier is reported separately in build_cocomo_factor_sentences).
+    """
+    mean = SOFTWARE_TRAINING_MEAN
+    entries = []
+    for driver in SOFTWARE_METADATA["non_cplx_drivers"]:
+        level = driver_levels[driver]
+        value = np.log(get_cocomo_em(driver, level))
+        contribution = SOFTWARE_COEF[driver] * (value - mean[driver])
+        entries.append({
+            "raw_feature": driver,
+            "contribution": contribution,
+            "value_phrase": f"{ORDINAL_LABELS[level]} {COCOMO_DRIVER_LABELS[driver]}",
+        })
+
+    cplx_level = driver_levels["cplx"]
+    cplx_value = np.log(get_cocomo_em("cplx", cplx_level))
+    cplx_contribution = SOFTWARE_CPLX_WEIGHT * (cplx_value - mean[SOFTWARE_CPLX_OFFSET_COL])
+    entries.append({
+        "raw_feature": "cplx",
+        "contribution": cplx_contribution,
+        "value_phrase": f"{ORDINAL_LABELS[cplx_level]} {COCOMO_DRIVER_LABELS['cplx']}",
+    })
+
+    log_kloc = np.log(kloc)
+    kloc_contribution = SOFTWARE_COEF["log_kloc"] * (log_kloc - mean["log_kloc"])
+    entries.append({
+        "raw_feature": "kloc",
+        "contribution": kloc_contribution,
+        "value_phrase": f"{kloc:g} KLOC project size",
+    })
+
+    mode_contribution = sum(
+        SOFTWARE_COEF[f"mode_{cat}"] * ((1 if cat == mode else 0) - mean[f"mode_{cat}"])
+        for cat in SOFTWARE_METADATA["mode_categories"]
+    )
+    entries.append({
+        "raw_feature": "mode",
+        "contribution": mode_contribution,
+        "value_phrase": f"{DEV_MODE_LABELS[mode]} development mode",
+    })
+
+    entries.sort(key=lambda e: abs(e["contribution"]), reverse=True)
+    top = entries[:TOP_N_FEATURES]
+    total_abs = sum(abs(e["contribution"]) for e in top)
+
+    opacities = [1, 0.78, 0.6, 0.42, 0.28]
+    rows = []
+    for i, entry in enumerate(top):
+        pct = float(abs(entry["contribution"]) / total_abs * 100) if total_abs > 0 else 0.0
+        rows.append({
+            "raw_feature": entry["raw_feature"],
+            "label": COCOMO_DRIVER_LABELS[entry["raw_feature"]],
+            "pct": round(pct, 1),
+            "contribution": entry["contribution"],
+            "multiplier_pct": (float(np.exp(entry["contribution"])) - 1) * 100,
+            "value_phrase": entry["value_phrase"],
+            "opacity": opacities[i] if i < len(opacities) else opacities[-1],
+        })
+    return rows
+
+
+def build_cocomo_factor_sentences(feature_rows: list[dict]) -> list[str]:
+    """Direction-aware sentences from the SIGNED contribution directly
+    (no z-score banding needed — a linear model's coefficient sign IS
+    the direction), plus the effort multiplier the brief asks for, e.g.
+    "Very High complexity: +35% effort."
+    """
+    sentences = []
+    for row in feature_rows:
+        multiplier_pct = row["multiplier_pct"]
+        label, pct, value_phrase = row["label"], row["pct"], row["value_phrase"]
+        if abs(multiplier_pct) < COCOMO_NEAR_TYPICAL_MULTIPLIER_PCT:
+            sentences.append(
+                f"{label} ({pct}%) — this project's {value_phrase} is close to typical, "
+                f"so it isn't pulling the estimate strongly in either direction."
+            )
+            continue
+        verb = "pushing" if multiplier_pct > 0 else "pulling"
+        direction = "up" if multiplier_pct > 0 else "down"
+        sentences.append(
+            f"{label} ({pct}%) — this project's {value_phrase} is {verb} the estimate {direction} "
+            f"by about {abs(multiplier_pct):.0f}% vs. a typical project."
+        )
+    return sentences
+
+
+def build_cocomo_confidence_note(driver_levels: dict[str, str], kloc: float) -> str | None:
+    """Rebuilt for the COCOMO-NASA-native model (Part B3): flags a KLOC
+    outside the real training range, or any driver rated at a level no
+    real NASA project was ever rated at for that specific driver —
+    naming the nearest real comparable example in training data. Only
+    the single most relevant issue is surfaced (KLOC first, then the
+    first out-of-coverage driver in COCOMO_ORDINAL_COLS order), same
+    one-note convention as the rest of this app rather than an
+    overwhelming multi-paragraph list.
+    """
+    if kloc < SOFTWARE_KLOC_COVERAGE["min_kloc"] or kloc > SOFTWARE_KLOC_COVERAGE["max_kloc"]:
+        return (
+            f"This project size ({kloc:g} KLOC) is outside the real training data's range "
+            f"({SOFTWARE_KLOC_COVERAGE['min_kloc']:g}–{SOFTWARE_KLOC_COVERAGE['max_kloc']:g} KLOC) — "
+            f"this estimate extrapolates beyond what the model has actually seen, so treat it with "
+            f"reduced confidence."
+        )
+
+    for driver in COCOMO_ORDINAL_COLS:
+        level = driver_levels[driver]
+        if level in SOFTWARE_DRIVER_COVERAGE[driver]:
+            continue
+        nearest = _nearest_observed_level(driver, level)
+        example = SOFTWARE_DRIVER_COVERAGE[driver][nearest]
+        return (
+            f"No real historical project in this model's training data was ever rated "
+            f"“{ORDINAL_LABELS[level]}” on {COCOMO_DRIVER_LABELS[driver]} — the nearest real "
+            f"comparable example was rated “{ORDINAL_LABELS[nearest]}” on this driver (a "
+            f"{example['example_kloc']:g} KLOC project that took {example['example_effort']:.0f} "
+            f"person-months). This estimate extrapolates beyond what the model has actually seen on this "
+            f"driver, so treat it with reduced confidence."
+        )
+    return None
+
+
+def compute_project_category(predicted_effort_months: float) -> str:
+    """Derived purely from the predicted effort — NOT a separate model
+    (Part B4). The 120-190 PM borderline band straddles the 150 PM
+    reference point deliberately wide, not a sharp cutoff, since the
+    regression's own error means a prediction near 150 could honestly
+    fall on either side of it.
+    """
+    if predicted_effort_months < PROJECT_CATEGORY_LOW_MAX_PM:
+        return "below"
+    if predicted_effort_months < PROJECT_CATEGORY_HIGH_MIN_PM:
+        return "borderline"
+    return "above"
+
+
 def build_factor_sentences(feature_rows: list[dict], raw_row: dict) -> list[str]:
     """Numbered, plain-language list below the bar chart (Part C) — real
-    per-request feature + percentage. `raw_row` is the SAME raw
-    (pre-scaled) dict predict_software()/predict_construction() already
-    built for the model — passed in here rather than re-derived, so this
-    function never duplicates any scaling/encoding logic.
+    per-request feature + percentage. CONSTRUCTION ONLY now (software has
+    its own build_cocomo_factor_sentences, since its linear model's
+    coefficients give an exact signed contribution rather than a z-score
+    band). `raw_row` is the SAME raw (pre-scaled) dict predict_
+    construction() already built for the model — passed in here rather
+    than re-derived, so this function never duplicates any scaling logic.
 
     DIRECTIONAL_FEATURES get a sentence stating whether THIS request's
     value is above/below what's typical in the training data (using the
-    signed `z` rank_features_for_request now keeps, not the abs() used
-    for salience) — fixes a real bug where a LOW complexity pick still
-    read "higher complexity ratings... increases the estimate," which
-    directly contradicted the Low pick. Every other feature keeps its
-    existing per-feature-TYPE explanatory clause (see assumption 7);
-    team_experience additionally gets the picked level's human-readable
-    label spliced in where cheap to do so (EXPERIENCE_LABELS), without
-    changing its neutral, non-directional wording.
+    signed `z` rank_features_for_request keeps, not the abs() used for
+    salience). Every other feature keeps its existing per-feature-TYPE
+    explanatory clause (see assumption 7).
     """
     sentences = []
     for row in feature_rows:
@@ -600,11 +879,6 @@ def build_factor_sentences(feature_rows: list[dict], raw_row: dict) -> list[str]
             continue
 
         explanation = explain_feature(raw_feature)
-        if raw_feature == TEAM_EXPERIENCE_COL and TEAM_EXPERIENCE_COL in raw_row:
-            level_key = str(int(raw_row[TEAM_EXPERIENCE_COL]))
-            level_label = EXPERIENCE_LABELS.get(level_key, "").split(" (")[0]  # drop "(little to no experience)"
-            if level_label:
-                explanation = f"this project's {level_label}-level {explanation}"
         sentences.append(f"{row['label']} ({row['pct']}%) — {explanation}.")
     return sentences
 
@@ -640,52 +914,45 @@ def compute_estimated_completion(start_month: int, start_year: int, effort_month
 # Prediction pipelines
 # ---------------------------------------------------------------------------
 
-def predict_software(complexity: str, team_experience: str, kloc: float, cost_region: str) -> dict:
-    # The unified model's `team_experience` feature is a 0-5-ish average
-    # (see src/unify_software.py — COCOMO's ordinal ratings average to
-    # 0-5, Desharnais's TeamExp/ManagerExp average to 0-4). The dropdown's
-    # 0-4 "experience level" index is used directly as that same numeric
-    # scale, consistent with how the ordinal complexity scale is reused
-    # elsewhere rather than converted through an intermediate label.
-    row = {
-        TEAM_EXPERIENCE_COL: float(int(team_experience)),
-        PROJECT_SIZE_COL: kloc,
-        COMPLEXITY_COL: complexity,
-        SOURCE_COL: SOFTWARE_SOURCE_DEFAULT,
-    }
+def resolve_cocomo_driver_levels(form) -> dict[str, str]:
+    """Builds the level (vl..xh) for all 15 COCOMO-NASA drivers from the
+    form: cplx comes straight from "Project Complexity"; the 5
+    EXPERIENCE_LINKED_DRIVERS follow Team Experience (TEAM_EXPERIENCE_TO_
+    ORDINAL) unless an Advanced override was submitted for that specific
+    driver; the remaining 9 ADVANCED_ONLY_DRIVERS take their Advanced
+    value, defaulting to Nominal if somehow missing (see Part B1).
+    """
+    levels = {"cplx": form["complexity"]}
 
-    raw_row_df = pd.DataFrame([row])
-    transformed = transform_software_row(raw_row_df)
+    mapped_default = TEAM_EXPERIENCE_TO_ORDINAL[form["team_experience"]]
+    for driver in EXPERIENCE_LINKED_DRIVERS:
+        override = (form.get(f"adv_{driver}") or "").strip()
+        levels[driver] = override if override else mapped_default
 
-    predicted_effort_months = max(float(SOFTWARE_MODEL.predict(transformed)[0]), 0.0)
-    feature_rows = rank_features_for_request(SOFTWARE_MODEL, transformed)
+    for driver in ADVANCED_ONLY_DRIVERS:
+        levels[driver] = (form.get(f"adv_{driver}") or "").strip() or "n"
 
-    # Honest out-of-training-range flag — see SOFTWARE_COMPLEXITY_COVERAGE
-    # above. Computed from the SAME real, raw KLOC unit the form collects
-    # (not the scaled/transformed vector), so the comparison is apples to
-    # apples with the training data's own real project sizes.
-    coverage = SOFTWARE_COMPLEXITY_COVERAGE.get(complexity, {"count": 0})
-    confidence_note = None
-    if coverage["count"] == 0:
-        confidence_note = (
-            f"No real historical project in this model's training data has "
-            f"\u201c{ORDINAL_LABELS.get(complexity, complexity)}\u201d complexity at all \u2014 "
-            f"this estimate isn't grounded in any comparable example, so treat it as a rough "
-            f"extrapolation only."
-        )
-    elif kloc < coverage["min_kloc"]:
-        confidence_note = (
-            f"This project size ({kloc:g} KLOC) is smaller than any "
-            f"\u201c{ORDINAL_LABELS.get(complexity, complexity)}\u201d-complexity project in the "
-            f"real historical training data \u2014 the smallest one on record is "
-            f"{coverage['min_kloc']:g} KLOC, which took {coverage['min_kloc_effort']:.0f} "
-            f"person-months. This estimate extrapolates beyond what the model has actually seen, "
-            f"so treat it with reduced confidence."
-        )
+    return levels
+
+
+def predict_software(form) -> dict:
+    kloc = float(form["project_size_kloc"])
+    mode = form.get("dev_mode", DEFAULT_DEV_MODE)
+    driver_levels = resolve_cocomo_driver_levels(form)
+
+    transformed = build_cocomo_feature_row(driver_levels, kloc, mode)
+    predicted_log_effort = float(SOFTWARE_MODEL.predict(transformed)[0])
+    predicted_effort_months = max(float(np.exp(predicted_log_effort)), 0.0)
+
+    feature_rows = rank_cocomo_drivers(driver_levels, kloc, mode)
+    factor_sentences = build_cocomo_factor_sentences(feature_rows)
+    confidence_note = build_cocomo_confidence_note(driver_levels, kloc)
+    project_category = PROJECT_CATEGORY_LABELS[compute_project_category(predicted_effort_months)]
 
     # Region-selectable $/person-month rate — a business-rate lookup, not
     # a model behavior (see COST_REGIONS above). Effort prediction above
     # is entirely unaffected by region; only this multiplier changes.
+    cost_region = form["cost_region"]
     cost_rate = COST_REGION_RATES[cost_region]
 
     return {
@@ -694,7 +961,8 @@ def predict_software(complexity: str, team_experience: str, kloc: float, cost_re
         "cost_rate": cost_rate,
         "cost_region_label": COST_REGION_LABELS[cost_region],
         "feature_rows": feature_rows,
-        "raw_row": row,
+        "factor_sentences": factor_sentences,
+        "project_category": project_category,
         "is_construction": False,
         "confidence_note": confidence_note,
     }
@@ -716,12 +984,14 @@ def predict_construction(form) -> dict:
 
     predicted_cost = max(float(CONSTRUCTION_MODEL.predict(transformed)[0]), 0.0)
     feature_rows = rank_features_for_request(CONSTRUCTION_MODEL, transformed)
+    factor_sentences = build_factor_sentences(feature_rows, row)
 
     return {
         "predicted_effort_months": None,
         "predicted_cost": predicted_cost,
         "feature_rows": feature_rows,
-        "raw_row": row,
+        "factor_sentences": factor_sentences,
+        "project_category": None,
         "is_construction": True,
         "confidence_note": None,
     }
@@ -763,10 +1033,20 @@ def validate_form(form) -> dict:
             errors["team_experience"] = "Please choose a team experience level."
         if form.get("cost_region") not in COST_REGION_VALUES:
             errors["cost_region"] = "Please choose a cost basis region."
+        if form.get("dev_mode") not in DEV_MODE_VALUES:
+            errors["dev_mode"] = "Please choose a development mode."
 
         err = _validate_positive_number(form.get("project_size_kloc"), "Project size", max_value=MAX_PROJECT_SIZE_KLOC)
         if err:
             errors["project_size_kloc"] = err
+
+        # Advanced cost drivers — all optional; "" (Auto) is always valid
+        # for EXPERIENCE_LINKED_DRIVERS, any other submitted value must be
+        # a real ordinal level for ANY of the 14 Advanced-eligible drivers.
+        for driver in ADVANCED_DRIVER_COLS:
+            raw_value = (form.get(f"adv_{driver}") or "").strip()
+            if raw_value and raw_value not in ORDINAL_VALUES:
+                errors[f"adv_{driver}"] = "Please choose a valid level, or leave this at its default."
 
         if form.get("start_month") not in MONTH_VALUES:
             errors["start_month"] = "Please choose a planned start month."
@@ -817,6 +1097,10 @@ def render_form(form_values, errors):
         ordinal_options=ORDINAL_OPTIONS,
         experience_options=EXPERIENCE_OPTIONS,
         cost_region_options=COST_REGION_OPTIONS,
+        dev_mode_options=DEV_MODE_OPTIONS,
+        advanced_experience_driver_options=ADVANCED_EXPERIENCE_DRIVER_OPTIONS,
+        advanced_only_drivers=[(driver, COCOMO_DRIVER_LABELS[driver]) for driver in ADVANCED_ONLY_DRIVERS],
+        experience_linked_drivers=[(driver, COCOMO_DRIVER_LABELS[driver]) for driver in EXPERIENCE_LINKED_DRIVERS],
         month_options=MONTH_OPTIONS,
         current_year=CURRENT_YEAR,
         min_start_year=MIN_START_YEAR,
@@ -841,16 +1125,11 @@ def predict():
     domain = request.form["domain"]
 
     if domain in SOFTWARE_DOMAIN_VALUES:
-        result = predict_software(
-            complexity=request.form["complexity"],
-            team_experience=request.form["team_experience"],
-            kloc=float(request.form["project_size_kloc"]),
-            cost_region=request.form["cost_region"],
-        )
+        result = predict_software(request.form)
     else:
         result = predict_construction(request.form)
 
-    factor_sentences = build_factor_sentences(result["feature_rows"], result["raw_row"])
+    factor_sentences = result["factor_sentences"]
 
     # Estimated completion date — software domains only (assumption 4:
     # Construction never predicts effort/duration, so there's nothing to
@@ -898,6 +1177,8 @@ def predict():
         feature_rows=result["feature_rows"],
         factor_sentences=factor_sentences,
         confidence_note=result.get("confidence_note"),
+        project_category=result.get("project_category"),
+        project_category_reference_pm=PROJECT_CATEGORY_REFERENCE_PM,
     )
 
 

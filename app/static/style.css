@@ -421,6 +421,59 @@ h1.page-title {
   font-size: 0.9rem;
 }
 
+/* Advanced cost drivers — collapsible <details>, software only */
+
+.advanced-drivers {
+  margin-top: 6px;
+  margin-bottom: 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 4px 16px;
+}
+
+.advanced-drivers summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  list-style: none;
+}
+
+.advanced-drivers summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-drivers summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--wine-2);
+  transition: transform 0.15s ease;
+}
+
+.advanced-drivers[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.advanced-drivers summary:hover {
+  color: var(--ink);
+}
+
+.advanced-drivers-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 16px;
+  padding: 4px 0 16px;
+}
+
+@media (max-width: 560px) {
+  .advanced-drivers-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Buttons */
 
 .btn {

@@ -24,10 +24,12 @@
   </div>
 
   <!-- ============ SOFTWARE FIELD GROUP (Software/Web, Mobile App, Enterprise/Other) ============ -->
-  <!-- Routes to models/final_model_software.pkl (the unified COCOMO-NASA + Desharnais + China model).
-       Team Experience / Project Size / Project Complexity genuinely feed the model — Team Size
-       and Required Reliability were investigated and removed entirely rather than kept as
-       decorative unused inputs.
+  <!-- Routes to models/final_model_software.pkl — a RidgeCV model trained directly on
+       COCOMO-NASA's own 15 effort-driver ratings (log-linear on log(effort)), not the old
+       4-feature unified blend. Project Size / Project Complexity / Team Experience / Development
+       Mode are the top-level fields; Team Experience also maps onto 5 of the 15 drivers
+       (acap/aexp/pcap/vexp/lexp — see app.py's TEAM_EXPERIENCE_TO_ORDINAL) unless overridden in
+       "Advanced cost drivers" below, which exposes the remaining drivers individually.
        Planned Start Month/Year are NOT model inputs — they're only used to turn the predicted
        effort into an approximate "Estimated completion" date on the results page (app.py's
        compute_estimated_completion); Construction has no effort/duration prediction to attach
@@ -78,6 +80,52 @@
       </select>
       {% if errors.complexity %}<span class="field-error">{{ errors.complexity }}</span>{% endif %}
     </div>
+
+    <div class="field-group">
+      <label for="dev_mode">Development Mode</label>
+      <select id="dev_mode" name="dev_mode">
+        {% for value, label, hint in dev_mode_options %}
+        <option value="{{ value }}" data-hint="{{ hint }}" {% if form_values.get('dev_mode') == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <span class="field-hint" id="dev-mode-hint">
+        {% for value, label, hint in dev_mode_options %}{% if form_values.get('dev_mode') == value %}{{ hint }}{% endif %}{% endfor %}
+      </span>
+      {% if errors.dev_mode %}<span class="field-error">{{ errors.dev_mode }}</span>{% endif %}
+    </div>
+
+    <!-- ============ ADVANCED COST DRIVERS (collapsible) ============ -->
+    <!-- COCOMO-NASA's other 14 effort-driver ratings (cplx is "Project Complexity" above,
+         the other 15th). acap/aexp/pcap/vexp/lexp default to "Auto" (follow Team Experience,
+         see app.py's TEAM_EXPERIENCE_TO_ORDINAL) unless set here; the remaining 9 default
+         to Nominal. Collapsed by default — most users never need to touch these. -->
+    <details class="advanced-drivers">
+      <summary>Advanced cost drivers</summary>
+      <div class="advanced-drivers-grid">
+        {% for driver, label in experience_linked_drivers %}
+        <div class="field-group">
+          <label for="adv_{{ driver }}">{{ label }}</label>
+          <select id="adv_{{ driver }}" name="adv_{{ driver }}">
+            {% for value, option_label in advanced_experience_driver_options %}
+            <option value="{{ value }}" {% if form_values.get('adv_' + driver, '') == value %}selected{% endif %}>{{ option_label }}</option>
+            {% endfor %}
+          </select>
+          {% if errors['adv_' + driver] %}<span class="field-error">{{ errors['adv_' + driver] }}</span>{% endif %}
+        </div>
+        {% endfor %}
+        {% for driver, label in advanced_only_drivers %}
+        <div class="field-group">
+          <label for="adv_{{ driver }}">{{ label }}</label>
+          <select id="adv_{{ driver }}" name="adv_{{ driver }}">
+            {% for value, option_label in ordinal_options %}
+            <option value="{{ value }}" {% if form_values.get('adv_' + driver, 'n') == value %}selected{% endif %}>{{ option_label }}</option>
+            {% endfor %}
+          </select>
+          {% if errors['adv_' + driver] %}<span class="field-error">{{ errors['adv_' + driver] }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </details>
 
     <div class="field-group">
       <label for="start_month">Planned Start Month</label>
@@ -191,9 +239,10 @@
 </form>
 
 <p class="footer-caption anim-in anim-delay-3">
-  Trained on COCOMO-NASA &amp; Desharnais historical project data (software) and the UCI Residential Building dataset (construction). Every prediction ships with the factors that drove it.
+  Software trained on COCOMO-NASA (93 projects, 15 cost drivers); construction on the UCI Residential Building dataset. Every prediction ships with the factors that drove it.
 </p>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script src="{{ url_for('static', filename='kloc-presets.js') }}"></script>
+<script src="{{ url_for('static', filename='dev-mode-hint.js') }}"></script>
 {% endblock %}
