@@ -94,3 +94,4 @@ Thumbs.db
 *.swp
 *.swo
 *~
+!models/final_model_software_metadata.pkl
