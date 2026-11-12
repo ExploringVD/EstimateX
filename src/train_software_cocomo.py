@@ -307,6 +307,37 @@ def repeated_cv_metrics(build_model, X, y_raw, y_fit, predict_is_log: bool) -> p
     return pd.DataFrame(rows)
 
 
+# ---------------------------------------------------------------------------
+# Effort "likely range" for the app — percentiles of the model's REAL
+# out-of-fold errors, not a made-up +/- %. Same 10x repeated 10-fold CV
+# (seeds 0-9) as repeated_cv_metrics; every residual comes from a model
+# that never saw that row. The app shows predicted x exp(q25) ..
+# predicted x exp(q75), i.e. the band half of past projects fell in.
+# ---------------------------------------------------------------------------
+
+EFFORT_RANGE_PERCENTILES = (25, 75)
+EFFORT_RANGE_Q25_KEY = "cv_log_residual_q25"
+EFFORT_RANGE_Q75_KEY = "cv_log_residual_q75"
+
+
+def oof_log_residuals(X, y_log) -> np.ndarray:
+    """log(actual) - log(predicted), out-of-fold, pooled across all
+    CV_REPEATS (10 x 93 = 930 residuals for COCOMO-NASA).
+    """
+    residuals = []
+    for seed in CV_REPEATS:
+        kfold = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=seed)
+        y_pred_log = cross_val_predict(build_cocomo_model(), X, y_log, cv=kfold)
+        residuals.append(np.asarray(y_log) - y_pred_log)
+    return np.concatenate(residuals)
+
+
+def effort_range_quantiles(X, y_log) -> dict:
+    """The two metadata keys the app's likely range is built from."""
+    q25, q75 = np.percentile(oof_log_residuals(X, y_log), EFFORT_RANGE_PERCENTILES)
+    return {EFFORT_RANGE_Q25_KEY: float(q25), EFFORT_RANGE_Q75_KEY: float(q75)}
+
+
 def summarize(df: pd.DataFrame, model_name: str) -> dict:
     row = {"Model": model_name}
     for col in METRIC_COLUMNS:
@@ -424,6 +455,7 @@ def main() -> None:
         "training_mean": {col: float(X_cocomo[col].mean()) for col in FULL_COLUMNS},
         "target_is_log": True,
         "model_kind": "cplx_offset_ridge",
+        **effort_range_quantiles(X_cocomo, y_cocomo_log),
     }
 
     save_artifact(final_model, NEW_MODEL_PATH)

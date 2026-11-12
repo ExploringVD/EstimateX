@@ -23,7 +23,7 @@
     </div>
   </div>
 
-  <!-- ============ SOFTWARE FIELD GROUP (Software/Web, Mobile App, Enterprise/Other) ============ -->
+  <!-- ============ SOFTWARE FIELD GROUP ============ -->
   <!-- Routes to models/final_model_software.pkl — a RidgeCV model trained directly on
        COCOMO-NASA's own 15 effort-driver ratings (log-linear on log(effort)), not the old
        4-feature unified blend. Project Size / Project Complexity / Team Experience / Development
@@ -58,7 +58,7 @@
            numeric field below via JS (kloc-presets.js) — no new form field,
            no new /predict parameter, the field stays freely editable before
            and after. Values are data-derived percentiles, see app.py's
-           KLOC_PRESETS comment. Software domains only, same as this field. -->
+           KLOC_PRESETS comment. Software only, same as this field. -->
       <div class="kloc-presets" role="group" aria-label="Quick-fill project size">
         {% for value, label, kloc in kloc_presets %}
         <button type="button" class="kloc-preset-btn" data-kloc-preset="{{ value }}" data-kloc-value="{{ kloc }}">

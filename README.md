@@ -2,7 +2,7 @@
 
 EstimateX is a machine learning system trained on historical project data that predicts software and construction project effort/cost across two independent project domains. Rather than acting as a black box, it explains its predictions through feature importance, and ships as a live, interactive Flask web app, not just a notebook.
 
-- **Software** (Software/Web, Mobile App, Enterprise/Other) — a sign-constrained linear model trained directly on COCOMO-NASA's own 93 projects and all 15 Boehm-1981 effort-driver ratings (not an averaged multi-dataset blend), predicting effort in person-months. See "Software model" below for why and how.
+- **Software** — a sign-constrained linear model trained directly on COCOMO-NASA's own 93 projects and all 15 Boehm-1981 effort-driver ratings (not an averaged multi-dataset blend), predicting effort in person-months. See "Software model" below for why and how.
 - **Construction** — a Random Forest model trained on the UCI Residential Building Data Set, predicting construction cost (native "10,000 IRR" units). Unchanged throughout the software model's redesign below.
 
 ## Software model
@@ -23,6 +23,10 @@ The deployed software model is `log(effort) = log(CPLX multiplier) + Ridge(14 ot
 R²(raw) (computed on un-logged person-months) is notably unstable for the deployed model (mean around -1.9, driven by a handful of large-effort outliers once exponentiated back out of log-space) — PRED(25)/R²(log)/MdMRE, the metrics the deploy decision is actually based on, are all strong and stable; R²(raw) is reported here for transparency, not as a deploy criterion.
 
 **Project category.** The results page also shows a Project category (Up to / Borderline around / Above 150 person-months — a 120–190 PM band around the reference point, wide on purpose since the regression has real error near that boundary). This is a threshold on the SAME predicted effort, not a separate classifier. Out-of-fold CV **category accuracy**: 91.7% ± 0.8% vs. a 61.3% majority-class baseline (`src/evaluate_software_category.py`) — always reported as "category accuracy," never as the regression model's own accuracy.
+
+**Duration and team size.** Predicted effort is in *person-months* — total work across the whole team — so it is not added to the start date directly. Calendar duration uses the published COCOMO schedule equation (Boehm 1981), `duration = 2.5 × effort^c` with `c` = 0.38 (organic), 0.35 (semidetached) or 0.32 (embedded); average team size = effort / duration. This is a fixed formula applied to the model's prediction, not a learned model. Example: ~147 PM, organic → ~16.7 months with ~8.8 people, so a January 2027 start finishes around June 2028. Cost is still effort × the selected region's $/person-month rate.
+
+**Likely range.** Alongside each estimate the app shows the band half of similar past projects fell in, from the model's real errors rather than a made-up ±%. `src/add_software_effort_range.py` collects the out-of-fold log residuals `log(actual) − log(predicted)` from the same 10x repeated 10-fold CV and stores their 25th/75th percentiles in `models/final_model_software_metadata.pkl` (q25 = −0.231, q75 = +0.289, i.e. 0.79× to 1.34× the predicted effort); the model itself is not refit. The same band is applied to cost (× rate) and to duration (through the schedule formula). Measured coverage: 49.9% on the pooled CV residuals, and 51.4% in a nested CV check where each test fold's band is computed only from its training folds.
 
 ## Tech Stack
 
@@ -64,7 +68,9 @@ EstimateX/
 │   ├── train_software_cocomo.py    # Trains + deploys the CURRENT software model (see "Software
 │   │                                # model" above) — the only software training script the app's
 │   │                                # models actually come from
-│   └── evaluate_software_category.py  # Out-of-fold CV "project category" accuracy check
+│   ├── evaluate_software_category.py  # Out-of-fold CV "project category" accuracy check
+│   └── add_software_effort_range.py   # Adds the CV-based effort "likely range" percentiles to the
+│                                        # software metadata (does not refit or touch the model)
 ├── models/                         # final_model_software.pkl / final_model_software_metadata.pkl
 │                                    # / final_model_construction.pkl / final_scaler_* / final_encoder_*
 │                                    # — the artifacts the app actually loads at runtime, plus
@@ -134,6 +140,7 @@ python src/preprocess_construction.py   # construction raw -> data/processed/con
 python src/train_new_domains.py         # trains, evaluates, and selects the final construction model
 python src/train_software_cocomo.py     # trains, CV-evaluates, and deploys the current software model
 python src/evaluate_software_category.py  # prints the "project category" accuracy check
+python src/add_software_effort_range.py   # adds the effort likely-range percentiles to the metadata
 ```
 
 Each script is idempotent and safe to re-run — outputs are overwritten deterministically (fixed `random_state=42` for model hyperparameters; `src/train_software_cocomo.py`'s own CV uses seeds 0-9, documented in its own module docstring).

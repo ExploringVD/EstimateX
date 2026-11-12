@@ -5,22 +5,33 @@
 <p class="page-subtitle anim-in anim-delay-1">{{ domain_label }}</p>
 
 <div class="card anim-in anim-delay-2">
-  <div class="result-grid">
+  <div class="result-grid{% if not is_construction %} result-grid-software{% endif %}">
     {% if not is_construction %}
     <div class="result-stat">
-      <div class="result-value" data-counter data-final="{{ predicted_effort_months }}" data-decimals="1">0.0</div>
-      <div class="result-label">Predicted Effort (months)</div>
+      <div class="result-value"><span data-counter data-final="{{ predicted_effort_months }}" data-decimals="1">0.0</span> <span class="result-unit">person-months</span></div>
+      <div class="result-label">Predicted effort</div>
+      <p class="result-substat">Likely range: <strong>{{ effort_range[0] }}–{{ effort_range[1] }}</strong> person-months</p>
       {% if project_category %}
       <p class="result-substat">Project category: <strong>{{ project_category }}</strong></p>
       <p class="result-substat-caption">Based on predicted effort; {{ project_category_reference_pm }} PM ≈ 12.5 person-years.</p>
       {% endif %}
+    </div>
+    <div class="result-stat">
+      <div class="result-value"><span data-counter data-final="{{ duration_months }}" data-decimals="1">0.0</span> <span class="result-unit">months</span></div>
+      <div class="result-label">Estimated duration</div>
+      <p class="result-substat">Likely range: <strong>{{ duration_range[0] }}–{{ duration_range[1] }}</strong> months</p>
+      <p class="result-substat-caption">2.5 × effort<sup>{{ schedule_exponent }}</sup> ({{ dev_mode_label }} mode)</p>
       {% if estimated_completion %}
       <p class="result-substat">Estimated completion: around <strong>{{ estimated_completion }}</strong></p>
-      <p class="result-substat-caption">(approx, based on predicted effort — actual timelines vary)</p>
+      <p class="result-substat-caption">(approx, based on estimated duration — actual timelines vary)</p>
       {% endif %}
     </div>
-    {% endif %}
     <div class="result-stat">
+      <div class="result-value"><span data-counter data-final="{{ avg_team_size }}" data-decimals="1" data-prefix="~">~0.0</span> <span class="result-unit">people</span></div>
+      <div class="result-label">Average team size</div>
+    </div>
+    {% endif %}
+    <div class="result-stat result-stat-cost">
       {% if is_construction %}
       <div class="result-value" data-counter data-final="{{ predicted_cost_native }}" data-decimals="0">0</div>
       {% else %}
@@ -28,10 +39,20 @@
       <div class="result-value-secondary" data-counter data-final="{{ predicted_cost_usd }}" data-decimals="0" data-prefix="≈ $">≈ $0</div>
       {% endif %}
       <div class="result-label">Predicted Cost</div>
+      {% if not is_construction %}
+      <p class="result-substat">Likely range: <strong>₹{{ cost_range_inr[0]|inr }}–₹{{ cost_range_inr[1]|inr }}</strong></p>
+      <p class="result-substat-caption">≈ ${{ "{:,}".format(cost_range_usd[0]) }}–${{ "{:,}".format(cost_range_usd[1]) }}</p>
+      {% endif %}
     </div>
   </div>
   {% if not is_construction %}
   <p class="result-caption">
+    Duration uses the COCOMO schedule formula; effort is total work across the whole team.
+  </p>
+  <p class="result-caption result-caption-tight">
+    Likely range: half of similar past projects fell in this band (from the model's cross-validation errors).
+  </p>
+  <p class="result-caption result-caption-tight">
     Cost assumes ${{ "{:,.0f}".format(cost_rate) }}/person-month ({{ cost_region_label }} reference rate, 2026) — pick a different region on the form for a different market's typical rate, converted at ₹{{ inr_per_usd }}/$1 (static demo rate)
   </p>
   {% else %}

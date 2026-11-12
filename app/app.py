@@ -13,15 +13,14 @@ per-request feature-importance explainability.
 ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
 =====================================================================
 
-1. DOMAIN -> MODEL ROUTING. "Software/Web", "Mobile App", and
-   "Enterprise/Other" all route to the SAME model, models/final_model_
-   software.pkl (the unified COCOMO-NASA + Desharnais + China model) —
-   there is only one trained software model, not three. Splitting the
-   dropdown into three labels is purely so a user describing their
-   project picks something that feels natural, not because the
-   underlying prediction differs by sub-domain; this is stated here so
-   it's never mistaken for three separate models.
-   "Construction" routes to models/final_model_construction.pkl.
+1. DOMAIN -> MODEL ROUTING. The dropdown has exactly two options:
+   "Software" routes to models/final_model_software.pkl and
+   "Construction" routes to models/final_model_construction.pkl. It used
+   to offer "Software/Web", "Mobile App" and "Enterprise/Other", but all
+   three routed to the same software model and so gave identical
+   results; they were merged into one "Software" option. A submitted
+   legacy value (LEGACY_SOFTWARE_DOMAIN_VALUES) is treated as "Software"
+   rather than rejected (see normalize_domain).
 
 2. SOFTWARE FORM FIELDS vs. THE UNIFIED MODEL'S ACTUAL FEATURES. The
    unified software model has exactly 4 features: team_experience,
@@ -65,7 +64,7 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
    never shows a "Predicted Effort" stat for Construction, and shows an
    explicit note instead of fabricating one.
 
-5. PREDICTED COST (software domains). None of the three training
+5. PREDICTED COST (software). None of the three training
    datasets (COCOMO-NASA, Desharnais, China) has a currency column —
    only EFFORT. "Predicted Cost" for software is a DERIVED, illustrative
    figure: effort (in person-months) x an assumed $/person-month rate,
@@ -82,7 +81,7 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
    a generic software-salary figure would have no honest basis; see #8
    below for why dual-currency display doesn't extend to Construction).
 
-6. DUAL CURRENCY DISPLAY (₹ / $) — SOFTWARE DOMAINS ONLY. Software's
+6. DUAL CURRENCY DISPLAY (₹ / $) — SOFTWARE ONLY. Software's
    predicted cost genuinely is a USD figure (assumption 5), so showing
    it in both USD and INR at a fixed, labeled rate (INR_PER_USD below)
    is a legitimate display-only conversion. Construction's predicted
@@ -111,18 +110,21 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
    what order, and at what percentage does. Documented here so this
    isn't mistaken for a fully dynamic natural-language generator.
 
-9. ESTIMATED COMPLETION DATE — SOFTWARE DOMAINS ONLY. Software's form
-   collects a planned start month/year; the results page adds the
-   predicted effort (rounded to the nearest whole month) to it and shows
-   "Estimated completion: around <Month> <Year>" (see
-   compute_estimated_completion). This is a derived, approximate figure
-   labeled as such — it inherits whatever error the underlying effort
-   prediction carries, it is not a second, independently-modeled
-   prediction. Construction has no effort/duration prediction to begin
-   with (assumption 4), so it gets neither the start-date inputs nor a
-   completion-date line at all.
+9. DURATION, TEAM SIZE AND COMPLETION DATE — SOFTWARE ONLY. Predicted
+   effort is in PERSON-MONTHS (total work across the whole team), not
+   calendar months, so it is never added to the start date directly.
+   Calendar duration comes from the published COCOMO schedule equation
+   (Boehm 1981), duration = 2.5 x effort^c with c set by development
+   mode (see SCHEDULE_EXPONENTS / compute_schedule) — a fixed published
+   formula, not a learned model. Average team size = effort / duration.
+   The completion date is the planned start month/year plus the rounded
+   duration (see compute_estimated_completion). All three are derived,
+   approximate figures that inherit the effort prediction's error; none
+   is a second, independently-modeled prediction. Construction has no
+   effort/duration prediction to begin with (assumption 4), so it gets
+   neither the start-date inputs nor any of these lines.
 
-10. REGION-SELECTABLE COST RATE — SOFTWARE DOMAINS ONLY.
+10. REGION-SELECTABLE COST RATE — SOFTWARE ONLY.
     software's $/person-month rate (assumption 5) is a business-rate
     lookup, not a trained model behavior — COST_REGIONS below holds 6
     representative markets, the form's "Cost basis region" dropdown
@@ -134,6 +136,15 @@ ASSUMPTIONS MADE HERE — flagged explicitly, so they can be adjusted:
     already-locality-aware ML prediction (see assumption 5), not an
     effort-times-rate estimate, so a generic regional salary figure has
     no honest relationship to it.
+
+11. EFFORT LIKELY RANGE — SOFTWARE ONLY. Alongside the point estimate,
+    the results page shows predicted x exp(q25) .. predicted x exp(q75),
+    where q25/q75 are the 25th/75th percentiles of the model's real
+    out-of-fold log residuals from its 10x repeated 10-fold CV (stored in
+    the metadata by src/add_software_effort_range.py) — the band half of
+    similar past projects fell in, not a made-up +/- %. The cost range is
+    the same band x the region rate; the duration range is the same band
+    run through the schedule formula (assumption 9).
 """
 
 from __future__ import annotations
@@ -171,7 +182,7 @@ app = Flask(__name__)
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 PROCESSED_DIR = os.path.join(PROJECT_ROOT, "data", "processed")
 
-# Region-selectable $/person-month rate — SOFTWARE DOMAINS ONLY. See
+# Region-selectable $/person-month rate — SOFTWARE ONLY. See
 # assumption 5: none of the three training datasets (COCOMO-NASA,
 # Desharnais, China) contain any real cost/salary data — the model only
 # ever learned EFFORT. The $/month multiplier has always been an external
@@ -239,7 +250,7 @@ TOP_N_FEATURES = 5
 
 MAX_PROJECT_SIZE_KLOC = 100_000
 
-# Quick-fill presets for the Project Size (KLOC) field — SOFTWARE DOMAINS
+# Quick-fill presets for the Project Size (KLOC) field — SOFTWARE
 # ONLY (Construction has no KLOC field at all). Pure UI convenience: these
 # are NOT a new model input or categorical feature — clicking a preset
 # just fills the same numeric project_size_kloc field a user would
@@ -257,14 +268,16 @@ KLOC_PRESETS = [
     ("large", "Large", 111),
 ]
 
+SOFTWARE_DOMAIN = "software"
+CONSTRUCTION_DOMAIN = "construction"
 DOMAIN_OPTIONS = [
-    ("software_web", "Software / Web"),
-    ("mobile_app", "Mobile App"),
-    ("enterprise_other", "Enterprise / Other"),
-    ("construction", "Construction"),
+    (SOFTWARE_DOMAIN, "Software"),
+    (CONSTRUCTION_DOMAIN, "Construction"),
 ]
 DOMAIN_LABELS = dict(DOMAIN_OPTIONS)
-SOFTWARE_DOMAIN_VALUES = {"software_web", "mobile_app", "enterprise_other"}
+# Former dropdown values that all routed to the same software model (see
+# assumption 1) — still accepted, and treated as "Software".
+LEGACY_SOFTWARE_DOMAIN_VALUES = {"software_web", "mobile_app", "enterprise_other"}
 
 ORDINAL_OPTIONS = [
     ("vl", "Very Low"), ("l", "Low"), ("n", "Nominal"),
@@ -311,7 +324,7 @@ ADVANCED_AUTO_VALUE = ""
 ADVANCED_EXPERIENCE_DRIVER_OPTIONS = [(ADVANCED_AUTO_VALUE, "Auto (from Team Experience)")] + ORDINAL_OPTIONS
 
 # Human-readable name + one-line hint per COCOMO-81 development mode —
-# shown as the "Development mode" dropdown, software domains only.
+# shown as the "Development mode" dropdown, software only.
 DEV_MODE_OPTIONS = [
     ("organic", "Organic", "Small, experienced team; familiar, in-house work; flexible requirements."),
     ("semidetached", "Semi-detached", "A mix of team experience and requirement flexibility — the middle ground."),
@@ -320,6 +333,15 @@ DEV_MODE_OPTIONS = [
 DEV_MODE_VALUES = {v for v, _, _ in DEV_MODE_OPTIONS}
 DEV_MODE_LABELS = {v: label for v, label, _ in DEV_MODE_OPTIONS}
 DEFAULT_DEV_MODE = "organic"
+
+# COCOMO schedule equation (Boehm 1981, "Software Engineering Economics"):
+#   duration_months = 2.5 x effort_PM ^ c
+# with c = 0.38 / 0.35 / 0.32 for organic / semidetached / embedded. This
+# is a PUBLISHED COCOMO equation applied to the model's predicted effort,
+# not a learned model — nothing here was fit to data. It turns total work
+# (person-months) into calendar time; see compute_schedule below.
+SCHEDULE_COEFFICIENT = 2.5
+SCHEDULE_EXPONENTS = {"organic": 0.38, "semidetached": 0.35, "embedded": 0.32}
 
 # Project category — derived from the predicted effort alone (see
 # predict_software / compute_project_category below), NOT a separate
@@ -337,7 +359,7 @@ PROJECT_CATEGORY_LABELS = {
     "above": "Above 150 person-months",
 }
 
-# Planned start month/year -> estimated completion date (software domains
+# Planned start month/year -> estimated completion date (software
 # only — see predict_software / compute_estimated_completion below).
 # Construction never predicts effort/duration at all (assumption 4 in the
 # module docstring), so it gets neither the inputs nor a completion date.
@@ -353,7 +375,7 @@ MIN_START_YEAR = 1990
 MAX_START_YEAR = CURRENT_YEAR + 50
 
 DEFAULT_FORM_VALUES = {
-    "domain": "software_web",
+    "domain": SOFTWARE_DOMAIN,
     "team_experience": "2",
     "project_size_kloc": "50",
     "complexity": "n",
@@ -565,6 +587,11 @@ SOFTWARE_TRAINING_MEAN = SOFTWARE_METADATA["training_mean"]
 SOFTWARE_EM_TABLE = SOFTWARE_METADATA["em_table"]
 SOFTWARE_CPLX_OFFSET_COL = SOFTWARE_METADATA["cplx_offset_col"]
 SOFTWARE_CPLX_WEIGHT = SOFTWARE_METADATA["cplx_weight"]
+# Likely-range bounds as effort multipliers, from the model's real CV
+# errors (assumption 11) — e.g. exp(q25) ~ 0.8 means "actual came in 20%
+# below predicted" at the 25th percentile.
+SOFTWARE_RANGE_LOW_FACTOR = float(np.exp(SOFTWARE_METADATA["cv_log_residual_q25"]))
+SOFTWARE_RANGE_HIGH_FACTOR = float(np.exp(SOFTWARE_METADATA["cv_log_residual_q75"]))
 
 
 def get_cocomo_em(driver: str, level: str) -> float:
@@ -884,25 +911,39 @@ def build_factor_sentences(feature_rows: list[dict], raw_row: dict) -> list[str]
 
 
 # ---------------------------------------------------------------------------
-# Start date -> estimated completion date (software domains only)
+# Effort -> calendar duration / team size, and start date -> estimated
+# completion date (software only)
 # ---------------------------------------------------------------------------
 
-def compute_estimated_completion(start_month: int, start_year: int, effort_months: float) -> tuple[str, int]:
-    """Adds the predicted effort (rounded to the nearest whole month) to a
-    planned start month/year, correctly handling month/year rollover.
+def compute_schedule(effort_pm: float, mode: str) -> tuple[float, float]:
+    """(duration_months, avg_team_size) from the published COCOMO schedule
+    equation — see SCHEDULE_EXPONENTS; not a learned model.
 
-    Example: start_month=1 (Jan), start_year=2026, effort_months=14.2
-      -> rounded_months = 14
-      -> total = (1 - 1) + 14 = 14
-      -> completion_month_index = 14 % 12 = 2 (0-based) -> March
-      -> completion_year = 2026 + 14 // 12 = 2026 + 1 = 2027
-      -> ("March", 2027)
+    Example: effort_pm=147, mode="organic"
+      -> duration = 2.5 x 147^0.38 ~ 16.7 months
+      -> team size = 147 / 16.7 ~ 8.8 people
+    """
+    duration_months = SCHEDULE_COEFFICIENT * effort_pm ** SCHEDULE_EXPONENTS[mode]
+    return duration_months, effort_pm / duration_months
+
+
+def compute_estimated_completion(start_month: int, start_year: int, duration_months: float) -> tuple[str, int]:
+    """Adds the calendar duration (rounded to the nearest whole month — from
+    compute_schedule, NOT the raw person-month effort) to a planned start
+    month/year, correctly handling month/year rollover.
+
+    Example: start_month=1 (Jan), start_year=2027, duration_months=16.7
+      -> rounded_months = 17
+      -> total = (1 - 1) + 17 = 17
+      -> completion_month_index = 17 % 12 = 5 (0-based) -> June
+      -> completion_year = 2027 + 17 // 12 = 2027 + 1 = 2028
+      -> ("June", 2028)
 
     This is explicitly an APPROXIMATION derived from the predicted effort
-    (itself an estimate with real error margin, see assumption 7) — never
-    presented as a guaranteed date, see results.html's caption.
+    (itself an estimate with real error margin) — never presented as a
+    guaranteed date, see results.html's caption.
     """
-    rounded_months = round(effort_months)
+    rounded_months = round(duration_months)
     total_months = (start_month - 1) + rounded_months
     completion_month_index = total_months % 12  # 0-based
     completion_year = start_year + total_months // 12
@@ -955,9 +996,22 @@ def predict_software(form) -> dict:
     cost_region = form["cost_region"]
     cost_rate = COST_REGION_RATES[cost_region]
 
+    # Likely range from the model's real CV errors (assumption 11), carried
+    # through to duration via the schedule formula and to cost via the rate.
+    effort_low = predicted_effort_months * SOFTWARE_RANGE_LOW_FACTOR
+    effort_high = predicted_effort_months * SOFTWARE_RANGE_HIGH_FACTOR
+    duration_months, avg_team_size = compute_schedule(predicted_effort_months, mode)
+
     return {
         "predicted_effort_months": predicted_effort_months,
+        "effort_range": (effort_low, effort_high),
+        "duration_months": duration_months,
+        "duration_range": (compute_schedule(effort_low, mode)[0], compute_schedule(effort_high, mode)[0]),
+        "avg_team_size": avg_team_size,
+        "schedule_exponent": SCHEDULE_EXPONENTS[mode],
+        "dev_mode_label": DEV_MODE_LABELS[mode],
         "predicted_cost": predicted_effort_months * cost_rate,
+        "cost_range": (effort_low * cost_rate, effort_high * cost_rate),
         "cost_rate": cost_rate,
         "cost_region_label": COST_REGION_LABELS[cost_region],
         "feature_rows": feature_rows,
@@ -1016,17 +1070,24 @@ def _validate_positive_number(raw_value, label: str, integer: bool = False, max_
     return None
 
 
+def normalize_domain(value: str | None) -> str | None:
+    """Maps a legacy software dropdown value (software_web / mobile_app /
+    enterprise_other) onto "software"; anything else passes through.
+    """
+    return SOFTWARE_DOMAIN if value in LEGACY_SOFTWARE_DOMAIN_VALUES else value
+
+
 def validate_form(form) -> dict:
     """Returns a dict of field -> error message. Empty dict means valid.
     Only validates the fields relevant to the submitted domain.
     """
     errors = {}
-    domain = form.get("domain")
+    domain = normalize_domain(form.get("domain"))
     if domain not in DOMAIN_LABELS:
         errors["domain"] = "Please choose a project domain."
         return errors
 
-    if domain in SOFTWARE_DOMAIN_VALUES:
+    if domain == SOFTWARE_DOMAIN:
         if form.get("complexity") not in ORDINAL_VALUES:
             errors["complexity"] = "Please choose a complexity level."
         if form.get("team_experience") not in EXPERIENCE_VALUES:
@@ -1088,6 +1149,20 @@ def validate_form(form) -> dict:
 # Routes
 # ---------------------------------------------------------------------------
 
+@app.template_filter("inr")
+def format_inr(value) -> str:
+    """Indian digit grouping (12,34,56,789) — matches the en-IN locale the
+    results page's animated ₹ counter already uses.
+    """
+    digits = str(int(round(value)))
+    head, tail = digits[:-3], digits[-3:]
+    groups = []
+    while head:
+        groups.insert(0, head[-2:])
+        head = head[:-2]
+    return ",".join(groups + [tail])
+
+
 def render_form(form_values, errors):
     return render_template(
         "form.html",
@@ -1118,30 +1193,33 @@ def index():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    errors = validate_form(request.form)
+    form_values = request.form.to_dict()
+    form_values["domain"] = normalize_domain(form_values.get("domain"))
+
+    errors = validate_form(form_values)
     if errors:
-        return render_form(request.form, errors), 400
+        return render_form(form_values, errors), 400
 
-    domain = request.form["domain"]
+    domain = form_values["domain"]
 
-    if domain in SOFTWARE_DOMAIN_VALUES:
-        result = predict_software(request.form)
+    if domain == SOFTWARE_DOMAIN:
+        result = predict_software(form_values)
     else:
-        result = predict_construction(request.form)
+        result = predict_construction(form_values)
 
     factor_sentences = result["factor_sentences"]
 
-    # Estimated completion date — software domains only (assumption 4:
+    # Estimated completion date — software only (assumption 4:
     # Construction never predicts effort/duration, so there's nothing to
-    # add a start date to). Derived from the SAME predicted effort shown
-    # above, rounded to the nearest whole month (see
-    # compute_estimated_completion's docstring for the rollover math).
+    # add a start date to). Uses the COCOMO schedule DURATION, not the
+    # person-month effort (assumption 9; see compute_estimated_completion's
+    # docstring for the rollover math).
     estimated_completion = None
     if not result["is_construction"]:
         completion_month_name, completion_year = compute_estimated_completion(
-            start_month=int(request.form["start_month"]),
-            start_year=int(request.form["start_year"]),
-            effort_months=result["predicted_effort_months"],
+            start_month=int(form_values["start_month"]),
+            start_year=int(form_values["start_year"]),
+            duration_months=result["duration_months"],
         )
         estimated_completion = f"{completion_month_name} {completion_year}"
 
@@ -1155,10 +1233,18 @@ def predict():
         predicted_cost_usd = None
         predicted_cost_inr = None
         predicted_cost_native = round(result["predicted_cost"], 0)
+        software_ranges = {}
     else:
         predicted_cost_usd = round(result["predicted_cost"], 0)
         predicted_cost_inr = round(result["predicted_cost"] * INR_PER_USD, 0)
         predicted_cost_native = None
+        cost_low, cost_high = result["cost_range"]
+        software_ranges = {
+            "effort_range": tuple(round(v) for v in result["effort_range"]),
+            "duration_range": tuple(round(v, 1) for v in result["duration_range"]),
+            "cost_range_usd": (round(cost_low), round(cost_high)),
+            "cost_range_inr": (round(cost_low * INR_PER_USD), round(cost_high * INR_PER_USD)),
+        }
 
     return render_template(
         "results.html",
@@ -1167,6 +1253,11 @@ def predict():
         predicted_effort_months=(
             round(result["predicted_effort_months"], 1) if result["predicted_effort_months"] is not None else None
         ),
+        duration_months=round(result["duration_months"], 1) if "duration_months" in result else None,
+        avg_team_size=round(result["avg_team_size"], 1) if "avg_team_size" in result else None,
+        schedule_exponent=result.get("schedule_exponent"),
+        dev_mode_label=result.get("dev_mode_label"),
+        **software_ranges,
         predicted_cost_usd=predicted_cost_usd,
         predicted_cost_inr=predicted_cost_inr,
         predicted_cost_native=predicted_cost_native,

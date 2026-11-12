@@ -572,6 +572,29 @@ h1.page-title {
   font-variant-numeric: tabular-nums;
 }
 
+/* Software results: effort / duration / team size side by side, cost on
+   its own full-width row (its ₹ figure is too wide for a third column). */
+.result-grid-software {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px 24px;
+}
+
+.result-grid-software .result-stat {
+  min-width: 0;
+}
+
+.result-grid-software .result-stat-cost {
+  grid-column: 1 / -1;
+}
+
+.result-unit {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
 .result-label {
   margin-top: 6px;
   font-size: 0.82rem;
@@ -602,6 +625,10 @@ h1.page-title {
   margin: 20px 0 0;
   font-size: 0.82rem;
   color: var(--ink-faint);
+}
+
+.result-caption-tight {
+  margin-top: 6px;
 }
 
 .result-note {
@@ -726,6 +753,10 @@ h1.page-title {
 
   .result-grid {
     gap: 20px;
+  }
+
+  .result-grid-software {
+    grid-template-columns: 1fr;
   }
 
   .result-value {

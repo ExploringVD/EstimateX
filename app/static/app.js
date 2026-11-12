@@ -1,11 +1,9 @@
 // EstimateX — domain-aware form toggle (no page reload), with a
 // fade/slide transition instead of an instant show/hide.
 //
-// Only "construction" shows the construction field group; every other
-// domain value (software_web, mobile_app, enterprise_other) shows the
-// software field group — they all route to the same unified software
-// model (see app.py), the domain split here is purely so the fields
-// shown feel natural, not because there are 3 separate models.
+// The dropdown has two options: "construction" shows the construction
+// field groups, "software" shows the software field group (see app.py's
+// DOMAIN_OPTIONS).
 (function () {
   var domainSelect = document.getElementById("domain");
   var softwareGroup = document.getElementById("software-fields");
