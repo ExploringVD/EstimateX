@@ -34,6 +34,15 @@ python app/app.py
 
 Then open http://127.0.0.1:8000/.
 
+## Deployment (Render)
+
+`render.yaml` defines a free Render web service; `.python-version` pins Python 3.13.2 and `app/requirements.txt` pins the package versions the models were saved with.
+
+- Build command: `pip install -r app/requirements.txt`
+- Start command: `gunicorn --chdir app app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120`
+
+The free tier sleeps after ~15 minutes without traffic, so the first request after that can take about a minute while the service wakes up.
+
 ## Retrain and check accuracy
 
 ```bash
