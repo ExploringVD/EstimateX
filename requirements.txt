@@ -1,12 +1,9 @@
-pandas
+flask
+joblib
 numpy
+pandas
 scikit-learn
 xgboost
 matplotlib
 seaborn
-flask
-streamlit
-joblib
 jupyter
-ipykernel
-openpyxl

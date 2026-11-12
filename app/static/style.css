@@ -9,7 +9,6 @@
   --ink-faint: #6c6f7c;
   --wine: #8c2f45;
   --wine-2: #b8455f;
-  --wine-dark: #5a1f30;
   --track: rgba(255, 255, 255, 0.08);
 
   --font-heading: "Space Grotesk", sans-serif;
@@ -55,10 +54,7 @@ body {
   z-index: 1;
 }
 
-/* Animated background — 3 large, soft blurred glow orbs, very slow
-   drift. Purely decorative (aria-hidden), fixed behind all content.
-   GPU-cheap: only transform/opacity are animated, nothing that
-   triggers layout. */
+/* Animated background orbs (decorative; only transform/opacity animate) */
 
 .bg-orbs {
   position: fixed;
@@ -109,10 +105,6 @@ body {
   animation-delay: -8s;
 }
 
-/* Movement is deliberately large (15-25% of viewport) and the scale
-   swing wide (0.8x-1.3x) so the motion is unmistakable within the first
-   couple of seconds, not a barely-there drift. */
-
 @keyframes driftOrb1 {
   0%   { transform: translate(0, 0) scale(1); }
   50%  { transform: translate(22vw, 18vh) scale(1.3); }
@@ -131,8 +123,7 @@ body {
   100% { transform: translate(0, 0) scale(1); }
 }
 
-/* Subtle panning grid overlay — a second, quieter layer of motion so the
-   background never reads as flat even between orb pulses. */
+/* Panning grid overlay */
 
 .bg-grid {
   position: fixed;
@@ -284,11 +275,7 @@ h1.page-title {
   margin-bottom: 30px;
 }
 
-/* Domain field-group toggle: fade/slide instead of an instant snap.
-   .toggle-hidden is added first (starts the fade-out), then JS sets the
-   `hidden` attribute after the transition finishes. .no-transition
-   suppresses the transition only for the very first render, so the form
-   doesn't visibly animate on page load. */
+/* Domain toggle: .toggle-hidden fades out before JS sets `hidden`; .no-transition skips it on first render */
 
 .toggle-group {
   transition: opacity 0.22s ease, transform 0.22s ease;
@@ -326,11 +313,7 @@ h1.page-title {
   margin-bottom: 6px;
 }
 
-/* Project Size (KLOC) quick-fill presets — a convenience layer above the
-   real, always-editable number input right below them (see kloc-presets.js).
-   Deliberately styled as plain toggle-able chips, not a select/radio group,
-   so it reads as "quick-fill a suggestion" rather than "choose one of these
-   three options" — the underlying field is the source of truth either way. */
+/* KLOC quick-fill presets */
 .kloc-presets {
   display: flex;
   gap: 8px;
@@ -361,9 +344,6 @@ h1.page-title {
   font-weight: 400;
 }
 
-/* Active state — set the moment a preset is clicked, cleared the moment
-   the user types a value that no longer matches it (see kloc-presets.js).
-   Never a locked/disabled look, just a highlight of the last-used shortcut. */
 .kloc-preset-btn.kloc-preset-active {
   border-color: var(--wine);
   background: rgba(140, 47, 69, 0.16);
@@ -572,8 +552,7 @@ h1.page-title {
   font-variant-numeric: tabular-nums;
 }
 
-/* Software results: effort / duration / team size side by side, cost on
-   its own full-width row (its ₹ figure is too wide for a third column). */
+/* Software results: effort, duration and team size side by side; cost on its own row (the ₹ figure is too wide) */
 .result-grid-software {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

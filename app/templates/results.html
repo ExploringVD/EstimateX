@@ -11,20 +11,16 @@
       <div class="result-value"><span data-counter data-final="{{ predicted_effort_months }}" data-decimals="1">0.0</span> <span class="result-unit">person-months</span></div>
       <div class="result-label">Predicted effort</div>
       <p class="result-substat">Likely range: <strong>{{ effort_range[0] }}–{{ effort_range[1] }}</strong> person-months</p>
-      {% if project_category %}
       <p class="result-substat">Project category: <strong>{{ project_category }}</strong></p>
       <p class="result-substat-caption">Based on predicted effort; {{ project_category_reference_pm }} PM ≈ 12.5 person-years.</p>
-      {% endif %}
     </div>
     <div class="result-stat">
       <div class="result-value"><span data-counter data-final="{{ duration_months }}" data-decimals="1">0.0</span> <span class="result-unit">months</span></div>
       <div class="result-label">Estimated duration</div>
       <p class="result-substat">Likely range: <strong>{{ duration_range[0] }}–{{ duration_range[1] }}</strong> months</p>
       <p class="result-substat-caption">2.5 × effort<sup>{{ schedule_exponent }}</sup> ({{ dev_mode_label }} mode)</p>
-      {% if estimated_completion %}
       <p class="result-substat">Estimated completion: around <strong>{{ estimated_completion }}</strong></p>
       <p class="result-substat-caption">(approx, based on estimated duration — actual timelines vary)</p>
-      {% endif %}
     </div>
     <div class="result-stat">
       <div class="result-value"><span data-counter data-final="{{ avg_team_size }}" data-decimals="1" data-prefix="~">~0.0</span> <span class="result-unit">people</span></div>
@@ -100,5 +96,4 @@
   </a>
 </div>
 
-<script src="{{ url_for('static', filename='results.js') }}"></script>
 {% endblock %}

@@ -23,21 +23,7 @@
     </div>
   </div>
 
-  <!-- ============ SOFTWARE FIELD GROUP ============ -->
-  <!-- Routes to models/final_model_software.pkl — a RidgeCV model trained directly on
-       COCOMO-NASA's own 15 effort-driver ratings (log-linear on log(effort)), not the old
-       4-feature unified blend. Project Size / Project Complexity / Team Experience / Development
-       Mode are the top-level fields; Team Experience also maps onto 5 of the 15 drivers
-       (acap/aexp/pcap/vexp/lexp — see app.py's TEAM_EXPERIENCE_TO_ORDINAL) unless overridden in
-       "Advanced cost drivers" below, which exposes the remaining drivers individually.
-       Planned Start Month/Year are NOT model inputs — they're only used to turn the predicted
-       effort into an approximate "Estimated completion" date on the results page (app.py's
-       compute_estimated_completion); Construction has no effort/duration prediction to attach
-       a start date to, so these two fields are software-only, same as the rest of this group.
-       Cost Basis Region is also NOT a model input — it only selects which market's $/person-
-       month rate turns the model's (region-independent) effort prediction into a cost figure.
-       Construction's cost is a real, currency-denominated ML prediction, not effort-times-rate,
-       so it deliberately has no region field at all. -->
+  <!-- Software (COCOMO model). Start date and region are not model inputs: they turn effort into a date and a cost. -->
   <div class="form-section toggle-group" id="software-fields">
     <p class="section-label">Team &amp; Scope</p>
 
@@ -53,12 +39,6 @@
 
     <div class="field-group">
       <label for="project_size_kloc">Estimated Project Size (KLOC)</label>
-      <!-- Quick-fill presets: pure convenience for people who don't know what
-           "KLOC" means for their project. Clicking one just sets the SAME
-           numeric field below via JS (kloc-presets.js) — no new form field,
-           no new /predict parameter, the field stays freely editable before
-           and after. Values are data-derived percentiles, see app.py's
-           KLOC_PRESETS comment. Software only, same as this field. -->
       <div class="kloc-presets" role="group" aria-label="Quick-fill project size">
         {% for value, label, kloc in kloc_presets %}
         <button type="button" class="kloc-preset-btn" data-kloc-preset="{{ value }}" data-kloc-value="{{ kloc }}">
@@ -94,11 +74,7 @@
       {% if errors.dev_mode %}<span class="field-error">{{ errors.dev_mode }}</span>{% endif %}
     </div>
 
-    <!-- ============ ADVANCED COST DRIVERS (collapsible) ============ -->
-    <!-- COCOMO-NASA's other 14 effort-driver ratings (cplx is "Project Complexity" above,
-         the other 15th). acap/aexp/pcap/vexp/lexp default to "Auto" (follow Team Experience,
-         see app.py's TEAM_EXPERIENCE_TO_ORDINAL) unless set here; the remaining 9 default
-         to Nominal. Collapsed by default — most users never need to touch these. -->
+    <!-- Advanced cost drivers: experience drivers default to Auto (follow Team Experience), the rest to Nominal. -->
     <details class="advanced-drivers">
       <summary>Advanced cost drivers</summary>
       <div class="advanced-drivers-grid">
@@ -157,9 +133,7 @@
     </div>
   </div>
 
-  <!-- ============ CONSTRUCTION FIELD GROUP ============ -->
-  <!-- Real columns from the UCI Residential Building dataset, not generic placeholders.
-       Routes to models/final_model_construction.pkl. -->
+  <!-- Construction (UCI Residential Building dataset) -->
   <div class="form-section toggle-group" id="construction-fields" hidden>
     <p class="section-label">Project Location &amp; Size</p>
 
@@ -242,7 +216,4 @@
   Software trained on COCOMO-NASA (93 projects, 15 cost drivers); construction on the UCI Residential Building dataset. Every prediction ships with the factors that drove it.
 </p>
 
-<script src="{{ url_for('static', filename='app.js') }}"></script>
-<script src="{{ url_for('static', filename='kloc-presets.js') }}"></script>
-<script src="{{ url_for('static', filename='dev-mode-hint.js') }}"></script>
 {% endblock %}

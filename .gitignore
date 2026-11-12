@@ -5,78 +5,37 @@ venv/
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.egg-info/
-.eggs/
-build/
-dist/
 
 # Jupyter
 .ipynb_checkpoints/
 
-# Data (raw/processed are generally large or regenerable — keep out of git)
+# Data: only the files below are tracked
 data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
-# Exception: small, canonical source datasets we want version-controlled as-is
 !data/raw/cocomo_nasa.csv
 !data/raw/desharnais.csv
-# Exception: small cleaned datasets produced by src/preprocessing.py
+!data/raw/china.arff
+!data/raw/construction_residential.csv
 !data/processed/cocomo_nasa_clean.csv
-!data/processed/desharnais_clean.csv
-# Exception: train/test splits produced by src/split_data.py
 !data/processed/cocomo_nasa_train.csv
 !data/processed/cocomo_nasa_test.csv
+!data/processed/desharnais_clean.csv
 !data/processed/desharnais_train.csv
 !data/processed/desharnais_test.csv
-# Exception: multi-domain extension — real construction dataset, and the
-# harmonized software dataset + its own train/test split
-!data/raw/construction_residential.csv
 !data/processed/software_unified.csv
 !data/processed/software_unified_train.csv
 !data/processed/software_unified_test.csv
 !data/processed/construction_clean.csv
-# Exception: third software dataset (China, PROMISE repository) added for
-# small-project coverage
-!data/raw/china.arff
 !data/processed/construction_train.csv
 !data/processed/construction_test.csv
 
-# Trained models (block .pkl by default — they're regenerable via
-# src/train_models.py — but explicitly track the 8 models from Step 6
-# since the app in a later step will load them directly)
+# Models: only the deployed artifacts the app loads are tracked
 models/*.pkl
-!models/.gitkeep
-!models/cocomo_nasa_linear_regression.pkl
-!models/cocomo_nasa_random_forest.pkl
-!models/cocomo_nasa_xgboost.pkl
-!models/cocomo_nasa_svr.pkl
-!models/desharnais_linear_regression.pkl
-!models/desharnais_random_forest.pkl
-!models/desharnais_xgboost.pkl
-!models/desharnais_svr.pkl
-# Exception: final deployment artifacts chosen in Step 9
-!models/final_model_cocomo.pkl
-!models/final_model_desharnais.pkl
-!models/final_scaler_cocomo.pkl
-!models/final_encoder_cocomo.pkl
-!models/final_scaler_desharnais.pkl
-!models/final_encoder_desharnais.pkl
-# Exception: multi-domain extension — per-algorithm models for the two
-# new domains, and their final deployment artifacts
-!models/software_linear_regression.pkl
-!models/software_random_forest.pkl
-!models/software_xgboost.pkl
-!models/software_svr.pkl
-!models/construction_linear_regression.pkl
-!models/construction_random_forest.pkl
-!models/construction_xgboost.pkl
-!models/construction_svr.pkl
 !models/final_model_software.pkl
+!models/final_model_software_metadata.pkl
 !models/final_model_construction.pkl
-!models/final_scaler_software.pkl
-!models/final_encoder_software.pkl
 !models/final_scaler_construction.pkl
 !models/final_encoder_construction.pkl
 
@@ -84,14 +43,9 @@ models/*.pkl
 .env
 .env.*
 
-# OS junk
+# OS / editor
 .DS_Store
 Thumbs.db
-
-# Editor junk
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
-!models/final_model_software_metadata.pkl

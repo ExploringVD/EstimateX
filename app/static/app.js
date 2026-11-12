@@ -1,9 +1,7 @@
-// EstimateX — domain-aware form toggle (no page reload), with a
-// fade/slide transition instead of an instant show/hide.
-//
-// The dropdown has two options: "construction" shows the construction
-// field groups, "software" shows the software field group (see app.py's
-// DOMAIN_OPTIONS).
+// EstimateX front end: form behaviour and results-page animations. Each block is a no-op
+// when its elements aren't on the current page.
+
+// Domain toggle: show the software or construction fields with a fade instead of a reload.
 (function () {
   var domainSelect = document.getElementById("domain");
   var softwareGroup = document.getElementById("software-fields");
@@ -19,12 +17,7 @@
     if (!group) return;
     var fields = group.querySelectorAll("input, select");
 
-    // Cancel any pending hide-after-transition callback from a PREVIOUS
-    // call for this same group — without this, a stale timeout (e.g.
-    // from the initial page-load state) can fire after a later toggle
-    // and re-hide a group that was just shown (a real race condition
-    // caught in testing: switching domains before the first timeout
-    // fired left the construction fields invisible).
+    // Cancel a pending hide from an earlier toggle so it can't re-hide a group just shown.
     if (group._hideTimeoutId) {
       window.clearTimeout(group._hideTimeoutId);
       group._hideTimeoutId = null;
@@ -32,8 +25,7 @@
 
     if (visible) {
       group.hidden = false;
-      // Force layout so the browser registers the "hidden" starting
-      // state before we remove it — otherwise the transition is skipped.
+      // Force layout so the transition starts from the hidden state.
       // eslint-disable-next-line no-unused-expressions
       group.offsetHeight;
       group.classList.remove("toggle-hidden");
@@ -72,8 +64,7 @@
   }
 
   domainSelect.addEventListener("change", applyDomain);
-  // Initial state applies instantly (no transition) so the form doesn't
-  // visibly animate on first load.
+  // Apply the initial state without animating.
   softwareGroup.classList.add("no-transition");
   constructionGroups.forEach(function (g) {
     if (g) g.classList.add("no-transition");
@@ -84,5 +75,95 @@
     constructionGroups.forEach(function (g) {
       if (g) g.classList.remove("no-transition");
     });
+  });
+})();
+
+// KLOC presets fill the project size field; typing a different value clears the highlight.
+(function () {
+  var presetButtons = document.querySelectorAll(".kloc-preset-btn");
+  var klocInput = document.getElementById("project_size_kloc");
+
+  if (!presetButtons.length || !klocInput) return;
+
+  presetButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      klocInput.value = btn.dataset.klocValue;
+      presetButtons.forEach(function (b) {
+        b.classList.remove("kloc-preset-active");
+      });
+      btn.classList.add("kloc-preset-active");
+      klocInput.dispatchEvent(new Event("input", { bubbles: true }));
+      klocInput.focus();
+    });
+  });
+
+  klocInput.addEventListener("input", function () {
+    var active = document.querySelector(".kloc-preset-active");
+    if (active && active.dataset.klocValue !== klocInput.value) {
+      active.classList.remove("kloc-preset-active");
+    }
+  });
+})();
+
+// Development mode hint follows the selected option.
+(function () {
+  var select = document.getElementById("dev_mode");
+  var hint = document.getElementById("dev-mode-hint");
+
+  if (!select || !hint) return;
+
+  select.addEventListener("change", function () {
+    var selected = select.options[select.selectedIndex];
+    hint.textContent = selected ? selected.dataset.hint || "" : "";
+  });
+})();
+
+// Results page: numbers count up and factor bars grow from zero.
+(function () {
+  var prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function formatNumber(value, decimals, locale) {
+    return value.toLocaleString(locale || "en-US", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  }
+
+  function animateCounter(el) {
+    var final = parseFloat(el.dataset.final);
+    if (isNaN(final)) return;
+    var decimals = parseInt(el.dataset.decimals || "0", 10);
+    var prefix = el.dataset.prefix || "";
+    var locale = el.dataset.locale || "en-US";
+
+    if (prefersReducedMotion) {
+      el.textContent = prefix + formatNumber(final, decimals, locale);
+      return;
+    }
+
+    var duration = 800;
+    var start = null;
+
+    function step(timestamp) {
+      if (start === null) start = timestamp;
+      var progress = Math.min((timestamp - start) / duration, 1);
+      var eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      el.textContent = prefix + formatNumber(final * eased, decimals, locale);
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        el.textContent = prefix + formatNumber(final, decimals, locale);
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  document.querySelectorAll("[data-counter]").forEach(animateCounter);
+  document.querySelectorAll("[data-bar-width]").forEach(function (bar) {
+    var index = parseInt(bar.dataset.barIndex || "0", 10);
+    var delay = prefersReducedMotion ? 0 : index * 80;
+    setTimeout(function () {
+      bar.style.width = bar.dataset.barWidth + "%";
+    }, delay + 100); // let the card fade in first
   });
 })();
